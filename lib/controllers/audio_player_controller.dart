@@ -85,7 +85,9 @@ class AudioPlayerController extends ChangeNotifier {
       _audioHandler?.mediaItem.value?.duration ?? Duration.zero;
 
   // Primary constructor
-  AudioPlayerController(AudioHandler handler) : _audioHandler = handler {
+  AudioPlayerController(AudioHandler handler, {OnAudioQuery? audioQuery})
+      : _audioHandler = handler,
+        _audioQueryInstance = audioQuery {
     debugPrint("AudioPlayerController: Created with injected handler");
     _sleepTimerService.onTimerEnd = () => pause();
     // Listen to streams to trigger UI updates immediately

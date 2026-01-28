@@ -16,6 +16,12 @@ class PermissionService {
   /// Returns [true] if all required permissions are granted.
   Future<bool> requestPermissions() async {
     if (kIsWeb) return true;
+
+    if (Platform.isIOS) {
+      PermissionStatus status = await Permission.mediaLibrary.request();
+      return status.isGranted;
+    }
+
     if (!Platform.isAndroid) return false;
 
     if (await _isAndroid13OrAbove()) {
@@ -42,6 +48,11 @@ class PermissionService {
   /// Checks if the necessary permissions are currently granted.
   Future<bool> hasPermissions() async {
     if (kIsWeb) return true;
+
+    if (Platform.isIOS) {
+      return await Permission.mediaLibrary.isGranted;
+    }
+
     if (!Platform.isAndroid) return false;
 
     if (await _isAndroid13OrAbove()) {

@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:path/path.dart' as p;
 
 class FolderController extends ChangeNotifier {
-  final OnAudioQuery _audioQuery = OnAudioQuery();
+  late final OnAudioQuery _audioQuery;
 
   // Map of folder path -> List of songs
   Map<String, List<SongModel>> _folders = {};
@@ -13,7 +14,8 @@ class FolderController extends ChangeNotifier {
 
   List<String> get folderPaths => _folders.keys.toList();
 
-  FolderController() {
+  FolderController({OnAudioQuery? audioQuery}) {
+    _audioQuery = audioQuery ?? OnAudioQuery();
     fetchFolders();
   }
 
@@ -58,6 +60,6 @@ class FolderController extends ChangeNotifier {
   }
 
   String getFolderName(String path) {
-    return path.split('/').last;
+    return p.basename(path);
   }
 }

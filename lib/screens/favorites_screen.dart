@@ -75,6 +75,29 @@ class FavoritesScreen extends StatelessWidget {
           );
         },
       ),
+      floatingActionButton: Consumer2<FavoritesController, AudioPlayerController>(
+        builder: (context, favorites, audioController, child) {
+          final favoriteSongs = audioController.songs
+              .where((song) => favorites.isFavorite(song.id.toString()))
+              .toList();
+
+          if (favoriteSongs.isEmpty) return const SizedBox.shrink();
+
+          return FloatingActionButton.extended(
+            onPressed: () {
+              audioController.playPlaylist(favoriteSongs, 0);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const PlayerScreen()),
+              );
+            },
+            backgroundColor: Colors.teal,
+            icon: const Icon(Icons.play_arrow_rounded, color: Colors.white),
+            label: const Text("Play All", style: TextStyle(color: Colors.white)),
+          );
+        },
+      ),
     );
   }
 }
+

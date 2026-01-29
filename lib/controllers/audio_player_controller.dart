@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -6,6 +7,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/audio_handler.dart';
 import '../services/sleep_timer_service.dart';
+import '../services/folder_selection_service.dart';
 
 class AudioPlayerController extends ChangeNotifier {
   // Lazy initialization of OnAudioQuery
@@ -157,8 +159,22 @@ class AudioPlayerController extends ChangeNotifier {
         ignoreCase: true,
       );
 
-      _songs =
-          allSongs.where((song) => (song.duration ?? 0) > minDuration).toList();
+      // Filter by duration
+      var filteredSongs = allSongs.where((song) => (song.duration ?? 0) > minDuration).toList();
+      
+      // Filter by selected folders
+      final folderService = FolderSelectionService();
+      final selectedFolders = await folderService.getSelectedFolders();
+      
+      if (selectedFolders.isNotEmpty) {
+        debugPrint("fetchSongs: Filtering by ${selectedFolders.length} selected folders");
+        filteredSongs = filteredSongs.where((song) {
+          final songFolder = song.data.substring(0, song.data.lastIndexOf('/'));
+          return selectedFolders.contains(songFolder);
+        }).toList();
+      }
+      
+      _songs = filteredSongs;
       debugPrint(
           "fetchSongs: Found ${_songs.length} songs (filtered from ${allSongs.length})");
       notifyListeners();
@@ -173,54 +189,87 @@ class AudioPlayerController extends ChangeNotifier {
   }
 
   Future<void> playPlaylist(List<SongModel> songs, int index) async {
-    // Service is always initialized now
+    if (_audioHandler == null) {
+      debugPrint("AudioPlayerController: Handler is null, cannot play");
+      return;
+    }
+    
+    if (songs.isEmpty) {
+      debugPrint("AudioPlayerController: No songs to play");
+      return;
+    }
 
     try {
-      final sources = songs.map((s) {
-        final String filePath = s.data;
-        Uri? artworkUri;
-        if (s.albumId != null) {
-          artworkUri =
-              Uri.parse("content://media/external/audio/albumart/${s.albumId}");
-        }
+      debugPrint("AudioPlayerController: playPlaylist called with ${songs.length} songs, starting at index $index");
+      
+      final sources = <AudioSource>[];
+      
+      for (var s in songs) {
+        try {
+          final String filePath = s.data;
+          
+          if (filePath.isEmpty) {
+            debugPrint("AudioPlayerController: Skipping song with empty path: ${s.title}");
+            continue;
+          }
+          
+          // Skip HTTP URLs for local music player - only process local files
+          if (filePath.startsWith('http')) {
+            debugPrint("AudioPlayerController: Skipping remote URL: ${s.title}");
+            continue;
+          }
+          
+          // Validate file exists before adding to playlist
+          final file = File(filePath);
+          if (!await file.exists()) {
+            debugPrint("AudioPlayerController: File not found, skipping: $filePath");
+            continue;
+          }
+          
+          Uri? artworkUri;
+          if (s.albumId != null) {
+            artworkUri = Uri.parse("content://media/external/audio/albumart/${s.albumId}");
+          }
 
-        if (filePath.startsWith('http')) {
-          return AudioSource.uri(
-            Uri.parse(filePath),
-            tag: MediaItem(
-              id: s.id.toString(),
-              album: s.album ?? "Unknown Album",
-              title: s.title,
-              artist: s.artist ?? "Unknown Artist",
-              duration: Duration(milliseconds: s.duration ?? 0),
-              artUri: artworkUri,
-              extras: {'url': filePath},
-            ),
+          final mediaItem = MediaItem(
+            id: s.id.toString(),
+            album: s.album ?? "Unknown Album",
+            title: s.title,
+            artist: s.artist ?? "Unknown Artist",
+            duration: Duration(milliseconds: s.duration ?? 0),
+            artUri: artworkUri,
+            extras: {'url': filePath},
           );
-        } else {
-          return AudioSource.file(
-            filePath,
-            tag: MediaItem(
-              id: s.id.toString(),
-              album: s.album ?? "Unknown Album",
-              title: s.title,
-              artist: s.artist ?? "Unknown Artist",
-              duration: Duration(milliseconds: s.duration ?? 0),
-              artUri: artworkUri,
-              extras: {'url': filePath},
-            ),
-          );
+
+          // Use Uri.file() for proper file:// URI conversion
+          final fileUri = Uri.file(filePath);
+          debugPrint("AudioPlayerController: Adding file source: $fileUri");
+          sources.add(AudioSource.uri(fileUri, tag: mediaItem));
+        } catch (e) {
+          debugPrint("AudioPlayerController: Error processing song ${s.title}: $e");
+          // Continue with next song instead of crashing
+          continue;
         }
-      }).toList();
+      }
+
+      if (sources.isEmpty) {
+        debugPrint("AudioPlayerController: No valid sources created");
+        return;
+      }
+
+      // Adjust index if songs were skipped
+      final safeIndex = index.clamp(0, sources.length - 1);
 
       if (_audioHandler is MyAudioHandler) {
         final handler = _audioHandler as MyAudioHandler;
-        await handler.setPlaylist(sources, index);
+        await handler.setPlaylist(sources, safeIndex);
         await handler.play();
+        debugPrint("AudioPlayerController: playPlaylist completed successfully");
       }
     } catch (e, stack) {
       debugPrint("AudioPlayerController: Error playing song: $e");
       debugPrint("Stack trace: $stack");
+      // Don't rethrow - just log the error to prevent app crash
     }
   }
 

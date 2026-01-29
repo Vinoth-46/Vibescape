@@ -6,6 +6,8 @@ import '../controllers/settings_controller.dart';
 import '../controllers/audio_player_controller.dart';
 import '../controllers/favorites_controller.dart';
 import '../controllers/playlist_controller.dart';
+import '../controllers/folder_controller.dart';
+import '../services/folder_selection_service.dart';
 import 'report_issue_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -74,6 +76,13 @@ class SettingsScreen extends StatelessWidget {
             ),
             onTap: () =>
                 _showDurationPicker(context, settings, audioController),
+          ),
+          _buildSettingsTile(
+            context,
+            icon: Icons.folder_special,
+            title: "Music Folders",
+            subtitle: "Select folders to scan for music",
+            onTap: () => _showFolderSelectionDialog(context, audioController),
           ),
           const SizedBox(height: 24),
           _buildSectionHeader(context, "Library Management"),
@@ -227,6 +236,28 @@ class SettingsScreen extends StatelessWidget {
               child:
                   const Text("Confirm", style: TextStyle(color: Colors.red))),
         ],
+      ),
+    );
+  }
+
+  void _showFolderSelectionDialog(BuildContext context, AudioPlayerController audioController) {
+    final folderController = FolderController();
+    final folderSelectionService = FolderSelectionService();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => _FolderSelectionDialog(
+        folderController: folderController,
+        folderSelectionService: folderSelectionService,
+        onSave: () async {
+          // Refresh library after folder selection changes
+          await audioController.refreshLibrary();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Music library updated")),
+            );
+          }
+        },
       ),
     );
   }
@@ -467,3 +498,141 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+
+/// Dialog for selecting which folders to include in music library
+class _FolderSelectionDialog extends StatefulWidget {
+  final FolderController folderController;
+  final FolderSelectionService folderSelectionService;
+  final VoidCallback onSave;
+
+  const _FolderSelectionDialog({
+    required this.folderController,
+    required this.folderSelectionService,
+    required this.onSave,
+  });
+
+  @override
+  State<_FolderSelectionDialog> createState() => _FolderSelectionDialogState();
+}
+
+class _FolderSelectionDialogState extends State<_FolderSelectionDialog> {
+  List<String> _allFolders = [];
+  Set<String> _selectedFolders = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFolders();
+  }
+
+  Future<void> _loadFolders() async {
+    // Wait for folders to load
+    await widget.folderController.fetchFolders();
+    
+    // Get all folder paths
+    _allFolders = widget.folderController.folderPaths;
+    
+    // Get previously selected folders
+    final selected = await widget.folderSelectionService.getSelectedFolders();
+    
+    setState(() {
+      _selectedFolders = selected.toSet();
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text("Select Music Folders"),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Colors.teal))
+            : _allFolders.isEmpty
+                ? const Center(
+                    child: Text(
+                      "No folders found.\nGrant storage permission first.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedFolders.isEmpty
+                            ? "All folders are included"
+                            : "${_selectedFolders.length} folder(s) selected",
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: _allFolders.length,
+                          itemBuilder: (ctx, index) {
+                            final folderPath = _allFolders[index];
+                            final folderName = widget.folderController.getFolderName(folderPath);
+                            final isSelected = _selectedFolders.contains(folderPath);
+                            final songCount = widget.folderController.getSongsInFolder(folderPath).length;
+                            
+                            return CheckboxListTile(
+                              value: isSelected,
+                              onChanged: (value) {
+                                setState(() {
+                                  if (value == true) {
+                                    _selectedFolders.add(folderPath);
+                                  } else {
+                                    _selectedFolders.remove(folderPath);
+                                  }
+                                });
+                              },
+                              title: Text(
+                                folderName,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                              subtitle: Text(
+                                "$songCount songs",
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                              activeColor: Colors.teal,
+                              dense: true,
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            setState(() {
+              _selectedFolders.clear();
+            });
+          },
+          child: const Text("Clear All", style: TextStyle(color: Colors.grey)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+          onPressed: () async {
+            await widget.folderSelectionService.saveSelectedFolders(_selectedFolders.toList());
+            widget.onSave();
+            if (context.mounted) {
+              Navigator.pop(context);
+            }
+          },
+          child: const Text("Save", style: TextStyle(color: Colors.white)),
+        ),
+      ],
+    );
+  }
+}
+

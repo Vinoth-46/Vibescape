@@ -11,17 +11,28 @@ import 'screens/main_screen.dart';
 import 'controllers/settings_controller.dart';
 import 'controllers/favorites_controller.dart';
 import 'controllers/playlist_controller.dart';
+import 'controllers/folder_controller.dart';
 import 'globals.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    DevicePreview(
-      enabled: !kReleaseMode,
-      builder: (context) => const MyApp(),
-    ),
-  );
+  
+  // Only use DevicePreview in debug mode on desktop/web for testing
+  // Completely bypass it on mobile devices to avoid crashes
+  if (kDebugMode && !kIsWeb) {
+    runApp(
+      DevicePreview(
+        enabled: false, // Disabled to prevent crashes on real devices
+        builder: (context) => const MyApp(),
+      ),
+    );
+  } else {
+    runApp(const MyApp());
+  }
 }
+
+// Check if running on web
+const bool kIsWeb = identical(0, 0.0);
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -50,7 +61,7 @@ class _MyAppState extends State<MyApp> {
           androidNotificationChannelName: 'Music Playback',
           androidNotificationOngoing: true,
           androidStopForegroundOnPause: true,
-          androidNotificationIcon: 'drawable/ic_launcher',
+          androidNotificationIcon: 'drawable/ic_notification',
         ),
       );
       if (mounted) {
@@ -106,6 +117,7 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(create: (_) => SettingsController()),
         ChangeNotifierProvider(create: (_) => FavoritesController()),
         ChangeNotifierProvider(create: (_) => PlaylistController()),
+        ChangeNotifierProvider(create: (_) => FolderController()),
       ],
       child: Consumer<SettingsController>(
         builder: (context, settings, child) {

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1075902730433",
+    "firebase_url": "https://vibescape-01-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "vibescape-01",
+    "storage_bucket": "vibescape-01.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1075902730433:android:11351490d51def7f474440",
+        "android_client_info": {
+          "package_name": "com.example.offline_music_player"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALPAEJHwEjX4QKSAnjTT5egl5pnIShX1k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

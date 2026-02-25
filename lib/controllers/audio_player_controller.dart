@@ -6,8 +6,10 @@ import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/audio_handler.dart';
+import '../services/youtube_audio_downloader.dart';
 import '../services/sleep_timer_service.dart';
 import '../services/folder_selection_service.dart';
+import '../models/stream_song_model.dart';
 
 class AudioPlayerController extends ChangeNotifier {
   // Lazy initialization of OnAudioQuery
@@ -41,6 +43,9 @@ class AudioPlayerController extends ChangeNotifier {
 
   // Streams - Route directly from AudioService (with null safety)
   Stream<Duration> get positionStream => AudioService.position;
+  
+  Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;
+  bool get isPlaying => _audioHandler?.playbackState.value.playing ?? false;
 
   Stream<PlayerState> get playerStateStream {
     if (_audioHandler == null) {
@@ -280,6 +285,11 @@ class AudioPlayerController extends ChangeNotifier {
     if (isSleepTimerActive) cancelSleepTimer();
   }
 
+  void stop() {
+    _audioHandler?.stop();
+    if (isSleepTimerActive) cancelSleepTimer();
+  }
+
   void seek(Duration position) => _audioHandler?.seek(position);
 
   void playNext() => _audioHandler?.skipToNext();
@@ -328,6 +338,90 @@ class AudioPlayerController extends ChangeNotifier {
       final handler = _audioHandler as MyAudioHandler;
       await handler.setRepeatMode(asMode);
     }
+    notifyListeners();
+  }
+
+  // Current streaming song for display purposes
+  StreamSongModel? _currentStreamSong;
+  StreamSongModel? get currentStreamSong => _currentStreamSong;
+
+  /// Play a streaming song from YouTube
+  Future<void> playStreamSong(StreamSongModel song, {String? streamUrl, bool autoPlay = true}) async {
+    if (_audioHandler == null) {
+      debugPrint("AudioPlayerController: Handler is null, cannot play stream");
+      return;
+    }
+
+    try {
+      debugPrint("AudioPlayerController: Playing stream: ${song.title}");
+      
+      // Store current streaming song
+      _currentStreamSong = song;
+      notifyListeners();
+      
+      // Create MediaItem for the stream
+      final mediaItem = MediaItem(
+        id: song.id,
+        album: song.album ?? "YouTube Music",
+        title: song.title,
+        artist: song.artist,
+        duration: song.duration,
+        artUri: song.thumbnailUrl != null ? Uri.parse(song.thumbnailUrl!) : null,
+        extras: {'isStream': true},
+      );
+
+      // Determine the local file path to play
+      String? localFilePath;
+
+      // Check if there's a local cached file already provided
+      if (streamUrl != null && !streamUrl.startsWith('http')) {
+        localFilePath = streamUrl;
+        debugPrint("AudioPlayerController: Playing from cache: $localFilePath");
+      } else {
+        // Download audio to temp file via youtube_explode_dart
+        // This bypasses ExoPlayer's HTTP client entirely — no 403, no timeouts
+        debugPrint("AudioPlayerController: Downloading audio for ${song.id}...");
+        localFilePath = await YoutubeAudioDownloader.download(song.id);
+        
+        if (localFilePath == null) {
+          debugPrint("AudioPlayerController: Download failed for ${song.id}");
+          _currentStreamSong = null;
+          notifyListeners();
+          return;
+        }
+        debugPrint("AudioPlayerController: Downloaded to: $localFilePath");
+      }
+
+      // Play from local file — guaranteed to work with ExoPlayer
+      final source = AudioSource.uri(
+        Uri.file(localFilePath),
+        tag: mediaItem,
+      );
+
+      if (_audioHandler is MyAudioHandler) {
+        final handler = _audioHandler as MyAudioHandler;
+        await handler.setPlaylist([source], 0);
+        if (autoPlay) {
+          await handler.play();
+        }
+        debugPrint("AudioPlayerController: Stream playback started");
+      }
+      
+      notifyListeners();
+    } catch (e, stack) {
+      debugPrint("AudioPlayerController: Error playing stream: $e");
+      debugPrint("Stack trace: $stack");
+      _currentStreamSong = null;
+      notifyListeners();
+    }
+  }
+
+  /// Check if currently playing a stream
+  bool get isPlayingStream => _currentStreamSong != null;
+
+  /// Clear current stream song (when switching to local)
+  void clearStreamSong() {
+    _currentStreamSong = null;
     notifyListeners();
   }
 }

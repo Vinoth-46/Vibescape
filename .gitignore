@@ -16,10 +16,8 @@ migrate_working_dir/
 *.iws
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# VS Code
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -31,9 +29,33 @@ migrate_working_dir/
 .pub/
 /build/
 
+# ========================================
+# 🔒 SECURITY - NEVER COMMIT THESE FILES
+# ========================================
+
+# Firebase configuration (contains API keys)
+**/google-services.json
+**/GoogleService-Info.plist
+lib/firebase_options.dart
+firebase.json
+.firebaserc
+
+# Signing keys and keystores
+*.jks
+*.keystore
+**/key.properties
+**/upload-keystore.jks
+**/release-keystore.jks
+
+# Environment files
+.env
+.env.*
+*.env
+
+# ========================================
+
 # Android related
 **/android/local.properties
-**/android/key.properties
 **/android/.gradle
 **/android/app/release/*.apk
 **/android/app/release/output.json
@@ -57,3 +79,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated plugin files (platform-specific, auto-generated)
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugins.cmake
+**/linux/flutter/generated_plugin_registrant.cc
+**/linux/flutter/generated_plugins.cmake

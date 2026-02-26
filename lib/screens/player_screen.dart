@@ -11,10 +11,20 @@ import '../controllers/party_controller.dart';
 import '../widgets/glass_container.dart';
 import '../globals.dart';
 
-class PlayerScreen extends StatelessWidget {
+class PlayerScreen extends StatefulWidget {
   final bool isFromPartyMode;
   
   const PlayerScreen({super.key, this.isFromPartyMode = false});
+
+  @override
+  State<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends State<PlayerScreen> {
+  // Cache last known song info to prevent flicker during skip transitions
+  String _lastTitle = "No Song Playing";
+  String _lastArtist = "Unknown Artist";
+  bool _lastIsStreaming = false;
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +47,16 @@ class PlayerScreen extends StatelessWidget {
     final streamSong = audio.currentStreamSong;
     final isStreaming = streamSong != null;
 
-    // Determine display info
-    final displayTitle = isStreaming ? streamSong.title : (currentSong?.title ?? "No Song Playing");
-    final displayArtist = isStreaming ? streamSong.artist : (currentSong?.artist ?? "Unknown Artist");
+    // Update cached info when we have valid song data
+    if (currentSong != null || streamSong != null) {
+      _lastTitle = isStreaming ? streamSong!.title : (currentSong?.title ?? _lastTitle);
+      _lastArtist = isStreaming ? streamSong!.artist : (currentSong?.artist ?? _lastArtist);
+      _lastIsStreaming = isStreaming;
+    }
+
+    // Use cached values for display
+    final displayTitle = _lastTitle;
+    final displayArtist = _lastArtist;
 
     // Theme-aware colors
     final textPrimary = isDarkMode ? Colors.white : Colors.black87;

@@ -18,6 +18,14 @@ class _MiniPlayerState extends State<MiniPlayer>
     with SingleTickerProviderStateMixin {
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
+  bool _hasAppeared = false;
+
+  // Cache last known song info to prevent flicker during transitions
+  String? _lastTitle;
+  String? _lastArtist;
+  String? _lastThumbnailUrl;
+  int? _lastLocalSongId;
+  bool _lastIsStreaming = false;
 
   @override
   void initState() {
@@ -33,7 +41,6 @@ class _MiniPlayerState extends State<MiniPlayer>
       parent: _slideController,
       curve: Curves.easeOutCubic,
     ));
-    _slideController.forward();
   }
 
   @override
@@ -55,17 +62,34 @@ class _MiniPlayerState extends State<MiniPlayer>
         final streamSong = controller.currentStreamSong;
         final localSong = controller.currentSong;
 
-        if (streamSong == null && localSong == null) {
+        // Update cached info when we have valid song data
+        if (streamSong != null || localSong != null) {
+          final isStreaming = streamSong != null;
+          _lastTitle = isStreaming ? streamSong.title : localSong!.title;
+          _lastArtist = isStreaming
+              ? streamSong.artist
+              : (localSong!.artist ?? "Unknown Artist");
+          _lastThumbnailUrl = isStreaming ? streamSong.thumbnailUrl : null;
+          _lastLocalSongId = isStreaming ? null : localSong!.id;
+          _lastIsStreaming = isStreaming;
+        }
+
+        // If no song has ever played, hide the mini player
+        if (_lastTitle == null) {
           return const SizedBox.shrink();
         }
 
-        final isStreaming = streamSong != null;
-        final title = isStreaming ? streamSong.title : localSong!.title;
-        final artist = isStreaming
-            ? streamSong.artist
-            : (localSong!.artist ?? "Unknown Artist");
-        final thumbnailUrl = isStreaming ? streamSong.thumbnailUrl : null;
-        final localSongId = isStreaming ? null : localSong!.id;
+        // Only animate slide-up on first appearance
+        if (!_hasAppeared) {
+          _hasAppeared = true;
+          _slideController.forward();
+        }
+
+        final title = _lastTitle!;
+        final artist = _lastArtist ?? "Unknown Artist";
+        final thumbnailUrl = _lastThumbnailUrl;
+        final localSongId = _lastLocalSongId;
+        final isStreaming = _lastIsStreaming;
 
         return SlideTransition(
           position: _slideAnimation,
@@ -138,35 +162,48 @@ class _MiniPlayerState extends State<MiniPlayer>
                               ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
                               : 0.0;
 
-                          return Container(
-                            height: 3,
-                            decoration: BoxDecoration(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.black.withOpacity(0.04),
-                            ),
-                            child: FractionallySizedBox(
-                              alignment: Alignment.centerLeft,
-                              widthFactor: progress,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF007AFF),
-                                      Color(0xFF00D4FF),
-                                    ],
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF007AFF).withOpacity(0.6),
-                                      blurRadius: 6,
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              final barWidth = constraints.maxWidth * progress;
+                              return SizedBox(
+                                height: 3,
+                                child: Stack(
+                                  children: [
+                                    // Background track
+                                    Container(
+                                      width: double.infinity,
+                                      height: 3,
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? Colors.white.withOpacity(0.05)
+                                            : Colors.black.withOpacity(0.04),
+                                      ),
+                                    ),
+                                    // Progress fill — always starts from left
+                                    Container(
+                                      width: barWidth,
+                                      height: 3,
+                                      decoration: BoxDecoration(
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            Color(0xFF007AFF),
+                                            Color(0xFF00D4FF),
+                                          ],
+                                        ),
+                                        boxShadow: progress > 0
+                                            ? [
+                                                BoxShadow(
+                                                  color: const Color(0xFF007AFF).withOpacity(0.6),
+                                                  blurRadius: 6,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ),
+                              );
+                            },
                           );
                         },
                       ),

@@ -263,15 +263,38 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Widget _buildTrendingSection(stream.StreamController controller) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return SliverToBoxAdapter(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cached Section
+          // ── Quick Play Genre Chips ──
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildQuickChip('Energize', Icons.bolt_rounded, const Color(0xFFFF6B35)),
+                _buildQuickChip('Relax', Icons.spa_rounded, const Color(0xFF4CAF50)),
+                _buildQuickChip('Workout', Icons.fitness_center_rounded, const Color(0xFFE91E63)),
+                _buildQuickChip('Focus', Icons.headphones_rounded, const Color(0xFF7C4DFF)),
+                _buildQuickChip('Commute', Icons.directions_car_rounded, const Color(0xFF00BCD4)),
+                _buildQuickChip('Party', Icons.celebration_rounded, const Color(0xFFFF9800)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Recently Played ──
           if (controller.cachedSongs.isNotEmpty) ...[
-            _buildSectionHeader('Downloaded', Icons.download_done_rounded),
+            _buildYTMusicHeader('Recently Played', Icons.history_rounded),
+            const SizedBox(height: 12),
             SizedBox(
-              height: 200,
+              height: 170,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
@@ -279,84 +302,353 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 itemCount: controller.cachedSongs.length,
                 itemBuilder: (context, index) {
                   final song = controller.cachedSongs[index];
-                  return _buildSongCard(song, controller, isCached: true);
+                  return _buildRecentCard(song, controller, isDark);
                 },
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 28),
           ],
 
-          // Trending Section
-          _buildSectionHeader('Trending Now', Icons.local_fire_department_rounded),
+          // ── Trending Now ──
+          _buildYTMusicHeader('Trending Now 🔥', Icons.trending_up_rounded),
+          const SizedBox(height: 12),
           if (controller.isLoadingTrending)
             const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(
-                child: CircularProgressIndicator(color: Color(0xFF007AFF)),
-              ),
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFF007AFF))),
             )
           else if (controller.trendingSongs.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 16),
-                    const Text('Unable to load trending songs', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF007AFF).withOpacity(0.1),
-                        foregroundColor: const Color(0xFF007AFF),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      onPressed: controller.loadTrendingSongs,
-                      child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            _buildEmptyState(controller)
           else
             SizedBox(
-              height: 200,
+              height: 220,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: controller.trendingSongs.length,
+                itemCount: controller.trendingSongs.length.clamp(0, 10),
                 itemBuilder: (context, index) {
                   final song = controller.trendingSongs[index];
-                  return _buildSongCard(song, controller);
+                  return _buildTrendingCard(song, controller, isDark, index);
                 },
               ),
             ),
+          const SizedBox(height: 28),
 
-          const SizedBox(height: 32),
+          // ── Suggested For You ──
+          if (controller.trendingSongs.length > 5) ...[
+            _buildYTMusicHeader('Suggested For You', Icons.auto_awesome_rounded),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: controller.trendingSongs
+                    .skip(5)
+                    .take(8)
+                    .map((song) => _buildSuggestedTile(song, controller, isDark))
+                    .toList(),
+              ),
+            ),
+            const SizedBox(height: 28),
+          ],
 
-          // Browse
-          _buildSectionHeader('Browse & Discover', Icons.explore_rounded),
+          // ── Browse & Discover ──
+          _buildYTMusicHeader('Browse & Discover', Icons.explore_rounded),
+          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            child: GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 2.4,
               children: [
-                _buildCategoryChip('Pop Hits', Icons.star_rounded),
-                _buildCategoryChip('Hip Hop', Icons.mic_rounded),
-                _buildCategoryChip('Rock', Icons.electric_bolt_rounded),
-                _buildCategoryChip('Classical', Icons.piano_rounded),
-                _buildCategoryChip('EDM', Icons.headphones_rounded),
-                _buildCategoryChip('Chill', Icons.spa_rounded),
-                _buildCategoryChip('Workout', Icons.fitness_center_rounded),
-                _buildCategoryChip('Sleep', Icons.bedtime_rounded),
+                _buildBrowseCard('Pop Hits', Icons.star_rounded, const Color(0xFFFF6B6B), const Color(0xFFEE5A24)),
+                _buildBrowseCard('Hip Hop', Icons.mic_rounded, const Color(0xFF7C4DFF), const Color(0xFF536DFE)),
+                _buildBrowseCard('Rock', Icons.electric_bolt_rounded, const Color(0xFFFF9800), const Color(0xFFFF5722)),
+                _buildBrowseCard('Classical', Icons.piano_rounded, const Color(0xFF26C6DA), const Color(0xFF0097A7)),
+                _buildBrowseCard('EDM', Icons.headphones_rounded, const Color(0xFFE040FB), const Color(0xFFAB47BC)),
+                _buildBrowseCard('Chill', Icons.spa_rounded, const Color(0xFF66BB6A), const Color(0xFF388E3C)),
               ],
             ),
           ),
-          const SizedBox(height: 120), // Bottom padding for navbar
+          const SizedBox(height: 120),
         ],
+      ),
+    );
+  }
+
+  Widget _buildYTMusicHeader(String title, IconData icon) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
+          Icon(icon, size: 22, color: const Color(0xFF007AFF)),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChip(String label, IconData icon, Color color) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: () {
+        final controller = context.read<stream.StreamController>();
+        _searchController.text = label;
+        setState(() => _isSearching = true);
+        controller.searchSongs(label);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(isDark ? 0.15 : 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentCard(StreamSongModel song, stream.StreamController controller, bool isDark) {
+    return GestureDetector(
+      onTap: () => _playSong(song, controller),
+      onLongPress: () => _showSongOptions(song, controller),
+      child: Container(
+        width: 130,
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 120,
+              width: 130,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    song.thumbnailUrl != null
+                        ? CachedNetworkImage(imageUrl: song.thumbnailUrl!, fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Center(child: Icon(Icons.music_note_rounded, size: 30))),
+                            errorWidget: (_, __, ___) => Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Center(child: Icon(Icons.music_note_rounded, size: 30))))
+                        : Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Center(child: Icon(Icons.music_note_rounded, size: 30))),
+                    Positioned(
+                      bottom: 6, right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: const Color(0xFF007AFF), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.download_done_rounded, size: 12, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
+            Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white38 : Colors.black38, fontSize: 11)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrendingCard(StreamSongModel song, stream.StreamController controller, bool isDark, int index) {
+    return GestureDetector(
+      onTap: () => _playSong(song, controller),
+      onLongPress: () => _showSongOptions(song, controller),
+      child: Container(
+        width: 165,
+        margin: const EdgeInsets.only(right: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 160,
+              width: 165,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: const Color(0xFF007AFF).withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 6))],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    song.thumbnailUrl != null
+                        ? CachedNetworkImage(imageUrl: song.thumbnailUrl!, fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF007AFF)))),
+                            errorWidget: (_, __, ___) => Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Center(child: Icon(Icons.music_note_rounded, size: 40))))
+                        : Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Center(child: Icon(Icons.music_note_rounded, size: 40))),
+                    Positioned.fill(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.6)]),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8, left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(color: const Color(0xFF007AFF), borderRadius: BorderRadius.circular(10)),
+                        child: Text('#${index + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 8, right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.3))),
+                        child: const Icon(Icons.play_arrow_rounded, size: 18, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
+            const SizedBox(height: 2),
+            Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 12, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestedTile(StreamSongModel song, stream.StreamController controller, bool isDark) {
+    final isCached = controller.isCached(song.id);
+    return GestureDetector(
+      onTap: () => _playSong(song, controller),
+      onLongPress: () => _showSongOptions(song, controller),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 52, height: 52,
+                child: song.thumbnailUrl != null
+                    ? CachedNetworkImage(imageUrl: song.thumbnailUrl!, fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Icon(Icons.music_note_rounded, size: 20)),
+                        errorWidget: (_, __, ___) => Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Icon(Icons.music_note_rounded, size: 20)))
+                    : Container(color: isDark ? Colors.grey[850] : Colors.grey[200], child: const Icon(Icons.music_note_rounded, size: 20)),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 3),
+                  Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 12)),
+                ],
+              ),
+            ),
+            if (isCached) const Padding(padding: EdgeInsets.only(right: 4), child: Icon(Icons.download_done_rounded, size: 18, color: Color(0xFF007AFF))),
+            IconButton(
+              icon: Icon(Icons.more_vert_rounded, color: isDark ? Colors.white30 : Colors.black26, size: 20),
+              onPressed: () => _showSongOptions(song, controller),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrowseCard(String label, IconData icon, Color color1, Color color2) {
+    return GestureDetector(
+      onTap: () {
+        final controller = context.read<stream.StreamController>();
+        _searchController.text = label;
+        setState(() => _isSearching = true);
+        controller.searchSongs(label);
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [color1, color2]),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [BoxShadow(color: color1.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))],
+        ),
+        child: Stack(
+          children: [
+            Positioned(right: -8, bottom: -8, child: Icon(icon, size: 50, color: Colors.white.withOpacity(0.15))),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 20, color: Colors.white),
+                  const SizedBox(height: 6),
+                  Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(stream.StreamController controller) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 16),
+            const Text('Unable to load trending songs', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF007AFF).withOpacity(0.1),
+                foregroundColor: const Color(0xFF007AFF),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: controller.loadTrendingSongs,
+              child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
       ),
     );
   }

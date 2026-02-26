@@ -7,7 +7,7 @@ Future<AudioHandler> initAudioService() async {
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
       androidNotificationChannelId:
-          'com.example.offline_music_player.channel.audio',
+          'com.vibescape.app.channel.audio',
       androidNotificationChannelName: 'Music Playback',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,

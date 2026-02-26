@@ -1,4 +1,4 @@
-package com.example.offline_music_player
+package com.vibescape.app
 
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 

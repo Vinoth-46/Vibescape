@@ -36,10 +36,9 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
-            // Enable code minification and resource shrinking for production
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // minifyEnabled disabled — R8 strips ExoPlayer/just_audio classes causing audio crash
+            minifyEnabled false
+            shrinkResources false
         }
     }
 }

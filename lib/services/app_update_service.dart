@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:open_filex/open_filex.dart';
 
 /// Model for a GitHub release
 class AppRelease {
@@ -152,20 +153,16 @@ class AppUpdateService {
     }
   }
 
-  /// Install APK using Android's package installer
+  /// Install APK using Android's package installer via open_filex
   static Future<bool> installApk(String filePath) async {
     try {
-      // Use process to trigger install intent via Android
-      // For a production app, use open_filex or android_intent package
-      final result = await Process.run('am', [
-        'start',
-        '-a', 'android.intent.action.VIEW',
-        '-t', 'application/vnd.android.package-archive',
-        '-d', 'file://$filePath',
-        '--grant-read-uri-permission',
-      ]);
-      debugPrint('AppUpdateService: Install intent result: ${result.stdout}');
-      return result.exitCode == 0;
+      debugPrint('AppUpdateService: Opening APK for install: $filePath');
+      final result = await OpenFilex.open(
+        filePath,
+        type: 'application/vnd.android.package-archive',
+      );
+      debugPrint('AppUpdateService: Install result: ${result.type} - ${result.message}');
+      return result.type == ResultType.done;
     } catch (e) {
       debugPrint('AppUpdateService: Install error: $e');
       return false;

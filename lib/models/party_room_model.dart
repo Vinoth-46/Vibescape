@@ -1,4 +1,4 @@
-import 'package:offline_music_player/models/stream_song_model.dart';
+import 'stream_song_model.dart';
 
 class PartyRoomModel {
   final String roomId;

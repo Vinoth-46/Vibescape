@@ -6,7 +6,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/audio_handler.dart';
-import '../services/youtube_audio_downloader.dart';
 import '../services/sleep_timer_service.dart';
 import '../services/folder_selection_service.dart';
 import '../models/stream_song_model.dart';
@@ -43,7 +42,8 @@ class AudioPlayerController extends ChangeNotifier {
   List<SongModel> get songs => _songs;
 
   // Streams - Route directly from AudioService (with null safety)
-  Stream<Duration> get positionStream => AudioService.position;
+  Stream<Duration> get positionStream => _audioHandler?.playbackState
+      .map((state) => state.updatePosition) ?? Stream.value(Duration.zero);
   
   Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;
   bool get isPlaying => _audioHandler?.playbackState.value.playing ?? false;
@@ -66,7 +66,7 @@ class AudioPlayerController extends ChangeNotifier {
     });
   }
 
-  SongModel? get currentSong {
+  SongModel? get currentLocalSong {
     final mediaItem = _audioHandler?.mediaItem.value;
     if (mediaItem == null) return null;
     try {
@@ -75,6 +75,13 @@ class AudioPlayerController extends ChangeNotifier {
       return null;
     }
   }
+
+  // Unified current playing song for UI
+  bool get isPlayingStream => _currentStreamSong != null;
+  dynamic get currentPlayingSong => isPlayingStream ? currentStreamSong : currentLocalSong;
+
+  // For backward compatibility until UI is fully swapped
+  SongModel? get currentSong => currentLocalSong;
 
   // Queue/Shuffle/Loop
   Stream<List<MediaItem>> get queueStream =>
@@ -443,33 +450,29 @@ class AudioPlayerController extends ChangeNotifier {
           
           debugPrint("AudioPlayerController: Loading playlist of ${playlist.length} songs at index $initialIndex");
           
-          // Convert all playlist songs to AudioSources.
-          // Note: YouTube URLs are expensive to fetch upfront, so ideally we would use 
-          // ResolvingAudioSources. However, since they rely on the native ExoPlayer plugin natively, 
-          // we inject them as URI sources alongside JioSaavn proxy URLs, and fetch dynamic sources on skip.
-          // For now, we will map them into basic URI sources. If a URL is missing (eg: youtube streams),
-          // it won't play until we resolve it right before playback in a real ResolvingSource. 
-          // To keep it simple, we load the clicked song properly as `source`, and others as placeholders.
-          
+          // CRITICAL FIX: Fetch fresh URLs lazily when skipping
           final sources = playlist.map((s) {
-            if (s.id == song.id) {
-               return source; // use the fully resolved source for the active song
-            } else {
-               // Placeholder for un-resolved background queue items
-               String tempUrl = s.cachedPath ?? 'https://example.com/placeholder.mp3';  
-               return AudioSource.uri(
-                  Uri.parse(tempUrl),
-                  tag: MediaItem(
-                    id: s.id,
-                    album: s.artist,
-                    title: s.title,
-                    artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
-                  ),
-               );
-            }
+            String tempUrl = s.cachedPath ?? 'https://example.com/placeholder-for-lazy-load.mp3';  
+            return s.id == song.id 
+                ? source 
+                : AudioSource.uri(
+                    Uri.parse(tempUrl),
+                    tag: MediaItem(
+                      id: s.id,
+                      album: s.album ?? "Streaming Music",
+                      artist: s.artist,
+                      title: s.title,
+                      artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
+                      extras: {'source': s.source, 'isStream': true},
+                    ),
+                 );
           }).toList();
           
           await handler.setPlaylist(sources, initialIndex);
+          
+          // Tell handler this is a streaming queue so it can re-fetch URLs lazily on skip
+          final playlistJson = playlist.map((s) => s.toJson()).toList();
+          await handler.customAction('setStreamingQueue', {'isStreamingQueue': true, 'playlist': playlistJson});
         } else {
           await handler.setPlaylist([source], 0);
         }
@@ -488,9 +491,6 @@ class AudioPlayerController extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  /// Check if currently playing a stream
-  bool get isPlayingStream => _currentStreamSong != null;
 
   /// Clear current stream song (when switching to local)
   void clearStreamSong() {

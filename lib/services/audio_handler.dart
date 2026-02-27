@@ -1,6 +1,8 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
+import '../services/jiosaavn_music_service.dart';
+import '../services/youtube_music_service.dart';
 
 Future<AudioHandler> initAudioService() async {
   return await AudioService.init(
@@ -18,6 +20,9 @@ Future<AudioHandler> initAudioService() async {
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer player = AudioPlayer();
+  
+  bool _isStreamingQueue = false;
+  List<dynamic>? _streamingPlaylist;
 
   MyAudioHandler() {
     _init();
@@ -32,6 +37,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Listen to playback events and broadcast state
     player.playbackEventStream.listen(_broadcastState);
+
+    // Eagerly resolve next items for seamless gapless playback without ExoPlayer errors
+    player.currentIndexStream.listen((index) {
+       if (_isStreamingQueue && _streamingPlaylist != null && index != null) {
+          if (index + 1 < _streamingPlaylist!.length) {
+             _resolveAndReplaceSource(index + 1);
+          }
+       }
+    });
 
     // Automatically skip to next when song completes
     player.processingStateStream.listen((state) {
@@ -109,6 +123,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> skipToNext() async {
+    if (_isStreamingQueue && _streamingPlaylist != null) {
+       final currentIndex = player.currentIndex;
+       if (currentIndex != null && currentIndex + 1 < _streamingPlaylist!.length) {
+          await _resolveAndReplaceSource(currentIndex + 1);
+       }
+    }
     if (player.hasNext) {
       await player.seekToNext();
     }
@@ -116,10 +136,53 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> skipToPrevious() async {
+    if (_isStreamingQueue && _streamingPlaylist != null) {
+       final currentIndex = player.currentIndex;
+       if (currentIndex != null && currentIndex - 1 >= 0) {
+          await _resolveAndReplaceSource(currentIndex - 1);
+       }
+    }
     if (player.hasPrevious) {
       await player.seekToPrevious();
     } else {
       await player.seek(Duration.zero);
+    }
+  }
+
+  Future<void> _resolveAndReplaceSource(int index) async {
+    try {
+      if (_streamingPlaylist == null || index < 0 || index >= _streamingPlaylist!.length) return;
+      
+      final songData = _streamingPlaylist![index] as Map<String, dynamic>;
+      final id = songData['id']?.toString() ?? '';
+      final sourceStr = songData['source'] as String?;
+      
+      final currentSource = player.audioSource;
+      if (currentSource is ConcatenatingAudioSource) {
+         final item = currentSource.sequence[index];
+         if (item is UriAudioSource) {
+           final uriString = item.uri.toString();
+           // Only resolve if it's our placeholder
+           if (uriString.contains('placeholder-for-lazy-load')) {
+             debugPrint("MyAudioHandler: Lazily resolving URL for $id...");
+             String? newUrl;
+             if (sourceStr == 'jiosaavn') {
+                newUrl = await JioSaavnMusicService().getStreamUrl(id);
+             } else {
+                newUrl = await YouTubeMusicService().getStreamUrl(id);
+             }
+             
+             if (newUrl != null) {
+                final newSource = AudioSource.uri(Uri.parse(newUrl), tag: item.tag);
+                await currentSource.removeAt(index);
+                await currentSource.insert(index, newSource);
+                debugPrint("MyAudioHandler: Successfully resolved URL for index $index");
+             }
+           }
+         }
+      }
+    } catch (e) {
+      debugPrint("MyAudioHandler: Error lazily resolving source: $e");
     }
   }
 
@@ -158,6 +221,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
            await currentSource.move(oldIndex, newIndex);
         }
       }
+    } else if (name == 'setStreamingQueue') {
+       _isStreamingQueue = extras?['isStreamingQueue'] == true;
+       _streamingPlaylist = extras?['playlist'] as List<dynamic>?;
+       debugPrint("MyAudioHandler: Received streaming queue of length ${_streamingPlaylist?.length}");
     }
   }
 

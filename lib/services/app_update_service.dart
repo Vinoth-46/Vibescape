@@ -128,7 +128,12 @@ class AppUpdateService {
       }
 
       final contentLength = response.contentLength ?? 0;
-      final dir = await getTemporaryDirectory();
+      Directory? dir;
+      if (Platform.isAndroid) {
+        dir = await getExternalStorageDirectory();
+      }
+      dir ??= await getTemporaryDirectory();
+      
       final filePath = '${dir.path}/app_update.apk';
       final file = File(filePath);
       final sink = file.openWrite();

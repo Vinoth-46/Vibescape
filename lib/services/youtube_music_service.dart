@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -15,6 +17,7 @@ enum StreamingQuality {
 class YouTubeMusicService {
   final YoutubeExplode _yt = YoutubeExplode();
   StreamingQuality _preferredQuality = StreamingQuality.high;
+  static const String _youtubeApiKey = 'AIzaSyCKKQYGUGiZz6xI7skyLBJL7npLrQICMIE';
   
   /// Set preferred streaming quality
   void setQuality(StreamingQuality quality) {
@@ -24,11 +27,42 @@ class YouTubeMusicService {
   /// Get current streaming quality
   StreamingQuality get quality => _preferredQuality;
 
-  /// Search for songs on YouTube
+  /// Search for songs on YouTube using Data API v3
   Future<List<StreamSongModel>> searchSongs(String query) async {
     try {
-      final searchResults = await _yt.search.search(query);
-      
+      final response = await http.get(Uri.parse(
+          'https://www.googleapis.com/youtube/v3/search?part=snippet&q=${Uri.encodeComponent(query)}&type=video&key=$_youtubeApiKey&maxResults=20&videoCategoryId=10')).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final items = data['items'] as List<dynamic>? ?? [];
+
+        final songs = <StreamSongModel>[];
+        for (final item in items) {
+          final snippet = item['snippet'];
+          // Using unescape logic indirectly by not touching it, or unescaping HTML entities if needed.
+          // The title from snippet could contain HTML entities like &amp;
+          String title = snippet['title']?.toString().replaceAll('&amp;', '&').replaceAll('&quot;', '"') ?? '';
+          
+          songs.add(StreamSongModel.fromYouTube(
+            videoId: item['id']['videoId'],
+            title: title,
+            artist: snippet['channelTitle'] ?? '',
+            thumbnailUrl: snippet['thumbnails']?['high']?['url'] ?? snippet['thumbnails']?['default']?['url'],
+            duration: Duration.zero, // Fast search doesn't return duration, default to zero
+          ));
+        }
+        return songs;
+      } else {
+        debugPrint('YouTubeMusicService: API search failed with ${response.statusCode}, falling back to scraping.');
+      }
+    } catch (e) {
+      debugPrint('YouTubeMusicService: API Search error: $e');
+    }
+
+    // Fallback to youtube_explode if API returns error
+    try {
+      final searchResults = await _yt.search.search('$query music').timeout(const Duration(seconds: 10));
       final songs = <StreamSongModel>[];
       for (final video in searchResults.take(20)) {
         songs.add(StreamSongModel.fromYouTube(
@@ -39,20 +73,54 @@ class YouTubeMusicService {
           duration: video.duration ?? Duration.zero,
         ));
       }
-      
       return songs;
     } catch (e) {
-      debugPrint('YouTubeMusicService: Search error: $e');
+      debugPrint('YouTubeMusicService: Scraping search error: $e');
       return [];
     }
   }
 
-  /// Get trending music videos
+  /// Get trending music videos using Data API v3
   Future<List<StreamSongModel>> getTrendingMusic() async {
     try {
-      // Search for popular music to simulate trending
-      final searchResults = await _yt.search.search('trending music 2024');
-      
+      // Use YouTube API for popular music videos in US or IN
+      final response = await http.get(Uri.parse(
+          'https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&chart=mostPopular&regionCode=IN&videoCategoryId=10&key=$_youtubeApiKey&maxResults=15')).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final items = data['items'] as List<dynamic>? ?? [];
+
+        final songs = <StreamSongModel>[];
+        for (final item in items) {
+          final snippet = item['snippet'];
+          
+          // Parse duration (ISO 8601 format like PT1M45S)
+          Duration parsedDuration = Duration.zero;
+          try {
+            final durationStr = item['contentDetails']?['duration'] as String?;
+            if (durationStr != null) {
+              parsedDuration = _parseIsoDuration(durationStr);
+            }
+          } catch (_) {}
+
+          songs.add(StreamSongModel.fromYouTube(
+            videoId: item['id'],
+            title: snippet['title'],
+            artist: snippet['channelTitle'],
+            thumbnailUrl: snippet['thumbnails']?['high']?['url'] ?? snippet['thumbnails']?['default']?['url'],
+            duration: parsedDuration,
+          ));
+        }
+        return songs;
+      }
+    } catch (e) {
+      debugPrint('YouTubeMusicService: API Trending error: $e');
+    }
+
+    // Fallback to youtube_explode
+    try {
+      final searchResults = await _yt.search.search('trending music 2024').timeout(const Duration(seconds: 10));
       final songs = <StreamSongModel>[];
       for (final video in searchResults.take(15)) {
         songs.add(StreamSongModel.fromYouTube(
@@ -63,18 +131,35 @@ class YouTubeMusicService {
           duration: video.duration ?? Duration.zero,
         ));
       }
-      
       return songs;
     } catch (e) {
-      debugPrint('YouTubeMusicService: Trending error: $e');
+      debugPrint('YouTubeMusicService: Scraping Trending error: $e');
       return [];
     }
+  }
+
+  /// Parse YouTube ISO 8601 duration (PT#M#S) into Duration
+  Duration _parseIsoDuration(String isoDuration) {
+    int hours = 0;
+    int minutes = 0;
+    int seconds = 0;
+    
+    final RegExp regExp = RegExp(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?');
+    final match = regExp.firstMatch(isoDuration);
+    
+    if (match != null) {
+      if (match.group(1) != null) hours = int.parse(match.group(1)!);
+      if (match.group(2) != null) minutes = int.parse(match.group(2)!);
+      if (match.group(3) != null) seconds = int.parse(match.group(3)!);
+    }
+    
+    return Duration(hours: hours, minutes: minutes, seconds: seconds);
   }
 
   /// Get stream URL for a video
   Future<String?> getStreamUrl(String videoId) async {
     try {
-      final manifest = await _yt.videos.streamsClient.getManifest(videoId);
+      final manifest = await _yt.videos.streamsClient.getManifest(videoId).timeout(const Duration(seconds: 15));
       
       // Get audio-only streams for efficient streaming
       final audioStreams = manifest.audioOnly.toList();
@@ -141,7 +226,7 @@ class YouTubeMusicService {
   /// Get video details
   Future<StreamSongModel?> getVideoDetails(String videoId) async {
     try {
-      final video = await _yt.videos.get(videoId);
+      final video = await _yt.videos.get(videoId).timeout(const Duration(seconds: 15));
       return StreamSongModel.fromYouTube(
         videoId: video.id.value,
         title: video.title,

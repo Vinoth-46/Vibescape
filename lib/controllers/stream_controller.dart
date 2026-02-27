@@ -1,16 +1,21 @@
 import 'package:flutter/foundation.dart';
 import '../models/stream_song_model.dart';
 import '../services/youtube_music_service.dart';
+import '../services/jiosaavn_music_service.dart';
 import '../services/cache_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 /// Controller for managing streaming songs
 class StreamController extends ChangeNotifier {
   final YouTubeMusicService _youtubeService = YouTubeMusicService();
+  final JioSaavnMusicService _jiosaavnService = JioSaavnMusicService();
   final CacheService _cacheService = CacheService();
 
   List<StreamSongModel> _searchResults = [];
   List<StreamSongModel> _trendingSongs = [];
+  List<StreamSongModel> _newReleases = [];
+  List<StreamSongModel> _topCharts = [];
   List<StreamSongModel> _cachedSongs = [];
   
   bool _isSearching = false;
@@ -18,10 +23,13 @@ class StreamController extends ChangeNotifier {
   bool _isDownloading = false;
   String? _currentDownloadId;
   String _searchQuery = '';
+  String _selectedLanguage = 'hindi';
 
   // Getters
   List<StreamSongModel> get searchResults => _searchResults;
   List<StreamSongModel> get trendingSongs => _trendingSongs;
+  List<StreamSongModel> get newReleases => _newReleases;
+  List<StreamSongModel> get topCharts => _topCharts;
   List<StreamSongModel> get cachedSongs => _cachedSongs;
   bool get isSearching => _isSearching;
   bool get isLoadingTrending => _isLoadingTrending;
@@ -29,12 +37,31 @@ class StreamController extends ChangeNotifier {
   String? get currentDownloadId => _currentDownloadId;
   String get searchQuery => _searchQuery;
   YouTubeMusicService get youtubeService => _youtubeService;
+  JioSaavnMusicService get jiosaavnService => _jiosaavnService;
   CacheService get cacheService => _cacheService;
+  String get selectedLanguage => _selectedLanguage;
 
   /// Initialize the controller
   Future<void> init() async {
     await _cacheService.init();
+    
+    // Load language preference
+    final prefs = await SharedPreferences.getInstance();
+    _selectedLanguage = prefs.getString('explore_language') ?? 'hindi';
+    
     await loadCachedSongs();
+    await loadTrendingSongs();
+  }
+
+  /// Change explore language and reload
+  Future<void> setLanguage(String language) async {
+    if (_selectedLanguage == language) return;
+    _selectedLanguage = language;
+    notifyListeners();
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('explore_language', language);
+    
     await loadTrendingSongs();
   }
 
@@ -52,7 +79,23 @@ class StreamController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _searchResults = await _youtubeService.searchSongs(query);
+      final ytFuture = _youtubeService.searchSongs(query);
+      final saavnFuture = _jiosaavnService.searchSongs(query);
+      
+      final results = await Future.wait([ytFuture, saavnFuture]);
+      final ytSongs = results[0];
+      final saavnSongs = results[1];
+      
+      // Combine results alternating
+      final combined = <StreamSongModel>[];
+      int maxLength = ytSongs.length > saavnSongs.length ? ytSongs.length : saavnSongs.length;
+      
+      for (int i = 0; i < maxLength; i++) {
+        if (i < saavnSongs.length) combined.add(saavnSongs[i]);
+        if (i < ytSongs.length) combined.add(ytSongs[i]);
+      }
+      
+      _searchResults = combined;
     } catch (e) {
       debugPrint('StreamController: Search error: $e');
       _searchResults = [];
@@ -68,14 +111,46 @@ class StreamController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _trendingSongs = await _youtubeService.getTrendingMusic();
+      final futures = await Future.wait([
+        _fetchCombined('latest trending $_selectedLanguage songs'),
+        _fetchCombined('latest $_selectedLanguage hits 2024'),
+        _fetchCombined('top 50 $_selectedLanguage songs'),
+      ]);
+      
+      _trendingSongs = futures[0];
+      _newReleases = futures[1];
+      _topCharts = futures[2];
     } catch (e) {
       debugPrint('StreamController: Trending error: $e');
       _trendingSongs = [];
+      _newReleases = [];
+      _topCharts = [];
     }
 
     _isLoadingTrending = false;
     notifyListeners();
+  }
+
+  Future<List<StreamSongModel>> _fetchCombined(String query) async {
+      try {
+        final ytFuture = _youtubeService.searchSongs(query);
+        final saavnFuture = _jiosaavnService.searchSongs(query);
+        final results = await Future.wait([ytFuture, saavnFuture]);
+        
+        final ytSongs = results[0];
+        final saavnSongs = results[1];
+        
+        final combined = <StreamSongModel>[];
+        int maxLength = ytSongs.length > saavnSongs.length ? ytSongs.length : saavnSongs.length;
+        for (int i = 0; i < maxLength; i++) {
+          if (i < saavnSongs.length) combined.add(saavnSongs[i]);
+          if (i < ytSongs.length) combined.add(ytSongs[i]);
+        }
+        return combined;
+      } catch (e) {
+        debugPrint('StreamController: Fetch combined error: $e');
+        return [];
+      }
   }
 
   /// Load cached songs
@@ -95,8 +170,29 @@ class StreamController extends ChangeNotifier {
       return _cacheService.getCachedPath(song.id);
     }
     
-    // Otherwise get the stream URL
-    return await _youtubeService.getStreamUrl(song.id);
+    // Otherwise get the stream URL based on source
+    try {
+      String? streamUrl;
+      if (song.source == 'jiosaavn') {
+        streamUrl = await _jiosaavnService.getStreamUrl(song.id);
+      } else {
+        streamUrl = await _youtubeService.getStreamUrl(song.id);
+      }
+      
+      // Fallback: If JioSaavn failed or empty, try formatting a youtube search query to find it
+      if (streamUrl == null && song.source == 'jiosaavn') {
+         debugPrint('StreamController: JioSaavn stream failed, falling back to YouTube for: ${song.title}');
+         final ytResults = await _youtubeService.searchSongs('${song.title} ${song.artist}');
+         if (ytResults.isNotEmpty) {
+            streamUrl = await _youtubeService.getStreamUrl(ytResults.first.id);
+         }
+      }
+      
+      return streamUrl;
+    } catch (e) {
+      debugPrint('StreamController: getStreamUrl error: $e');
+      return null;
+    }
   }
 
   /// Download and cache a song
@@ -108,7 +204,19 @@ class StreamController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final streamUrl = await _youtubeService.getStreamUrl(song.id);
+      String? streamUrl;
+      if (song.source == 'jiosaavn') {
+        streamUrl = await _jiosaavnService.getStreamUrl(song.id);
+      } else {
+        streamUrl = await _youtubeService.getStreamUrl(song.id);
+      }
+      
+      if (streamUrl == null && song.source == 'jiosaavn') {
+         final ytResults = await _youtubeService.searchSongs('${song.title} ${song.artist}');
+         if (ytResults.isNotEmpty) {
+            streamUrl = await _youtubeService.getStreamUrl(ytResults.first.id);
+         }
+      }
       if (streamUrl == null) {
         _isDownloading = false;
         _currentDownloadId = null;
@@ -161,6 +269,7 @@ class StreamController extends ChangeNotifier {
   /// Set streaming quality
   void setStreamingQuality(StreamingQuality quality) {
     _youtubeService.setQuality(quality);
+    _jiosaavnService.setQuality(quality);
     notifyListeners();
   }
 

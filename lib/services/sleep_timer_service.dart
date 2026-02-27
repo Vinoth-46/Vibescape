@@ -10,8 +10,17 @@ class SleepTimerService {
   Stream<Duration?> get remainingTimeStream => _remainingTimeController.stream;
   bool get isActive => _timer != null && _timer!.isActive;
   Duration? get remainingTime => _remainingTime;
+  bool _isEndOfTrack = false;
+  bool get isEndOfTrack => _isEndOfTrack;
 
   VoidCallback? onTimerEnd;
+
+  void setEndOfTrack() {
+    cancelTimer();
+    _isEndOfTrack = true;
+    _remainingTime = const Duration(seconds: -1);
+    _remainingTimeController.add(_remainingTime);
+  }
 
   void setTimer(Duration duration) {
     cancelTimer();
@@ -35,6 +44,7 @@ class SleepTimerService {
     _timer?.cancel();
     _timer = null;
     _remainingTime = null;
+    _isEndOfTrack = false;
     _remainingTimeController.add(null);
   }
 

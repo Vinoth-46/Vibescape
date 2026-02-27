@@ -177,7 +177,39 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         );
                       },
                     ),
-                    const SizedBox(width: 8),
+                    Consumer<stream.StreamController>(
+                      builder: (context, controller, child) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: controller.selectedLanguage,
+                              icon: const Icon(Icons.language_rounded, color: Color(0xFF007AFF), size: 20),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: isDarkMode ? Colors.white : Colors.black87,
+                              ),
+                              dropdownColor: isDarkMode ? const Color(0xFF1E1E2C) : Colors.white,
+                              borderRadius: BorderRadius.circular(16),
+                              items: const [
+                                DropdownMenuItem(value: 'hindi', child: Text('Hindi')),
+                                DropdownMenuItem(value: 'english', child: Text('English')),
+                                DropdownMenuItem(value: 'punjabi', child: Text('Punjabi')),
+                                DropdownMenuItem(value: 'tamil', child: Text('Tamil')),
+                                DropdownMenuItem(value: 'telugu', child: Text('Telugu')),
+                                DropdownMenuItem(value: 'malayalam', child: Text('Malayalam')),
+                              ],
+                              onChanged: (String? newValue) {
+                                if (newValue != null) {
+                                  controller.setLanguage(newValue);
+                                }
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ] else ...[
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -269,109 +301,130 @@ class _ExploreScreenState extends State<ExploreScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Quick Play Genre Chips ──
-          const SizedBox(height: 8),
+        // ── Quick Play Genre Chips ──
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              _buildQuickChip('All', Icons.music_note_rounded, const Color(0xFF1DB954)),
+              _buildQuickChip('Energize', Icons.bolt_rounded, const Color(0xFFFF6B35)),
+              _buildQuickChip('Relax', Icons.spa_rounded, const Color(0xFF4CAF50)),
+              _buildQuickChip('Workout', Icons.fitness_center_rounded, const Color(0xFFE91E63)),
+              _buildQuickChip('Focus', Icons.headphones_rounded, const Color(0xFF7C4DFF)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Global Top Charts ──
+        if (controller.isLoadingTrending)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 40),
+            child: Center(child: CircularProgressIndicator(color: Color(0xFF1DB954))),
+          )
+        else if (controller.topCharts.isNotEmpty) ...[
+          _buildYTMusicHeader('Global Top Charts', Icons.public_rounded),
+          const SizedBox(height: 12),
           SizedBox(
-            height: 44,
-            child: ListView(
+            height: 220,
+            child: ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              children: [
-                _buildQuickChip('Energize', Icons.bolt_rounded, const Color(0xFFFF6B35)),
-                _buildQuickChip('Relax', Icons.spa_rounded, const Color(0xFF4CAF50)),
-                _buildQuickChip('Workout', Icons.fitness_center_rounded, const Color(0xFFE91E63)),
-                _buildQuickChip('Focus', Icons.headphones_rounded, const Color(0xFF7C4DFF)),
-                _buildQuickChip('Commute', Icons.directions_car_rounded, const Color(0xFF00BCD4)),
-                _buildQuickChip('Party', Icons.celebration_rounded, const Color(0xFFFF9800)),
-              ],
+              itemCount: controller.topCharts.length.clamp(0, 15),
+              itemBuilder: (context, index) {
+                final song = controller.topCharts[index];
+                return _buildTrendingCard(song, controller, isDark, index);
+              },
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
+        ],
 
-          // ── Recently Played ──
-          if (controller.cachedSongs.isNotEmpty) ...[
-            _buildYTMusicHeader('Recently Played', Icons.history_rounded),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 170,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: controller.cachedSongs.length,
-                itemBuilder: (context, index) {
-                  final song = controller.cachedSongs[index];
-                  return _buildRecentCard(song, controller, isDark);
-                },
-              ),
+        // ── New Releases ──
+        if (!controller.isLoadingTrending && controller.newReleases.isNotEmpty) ...[
+          _buildYTMusicHeader('New Releases', Icons.new_releases_rounded),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 220,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: controller.newReleases.length.clamp(0, 15),
+              itemBuilder: (context, index) {
+                final song = controller.newReleases[index];
+                return _buildTrendingCard(song, controller, isDark, index);
+              },
             ),
-            const SizedBox(height: 28),
-          ],
+          ),
+          const SizedBox(height: 28),
+        ],
 
-          // ── Trending Now ──
+        // ── Trending Now ──
+        if (!controller.isLoadingTrending && controller.trendingSongs.isNotEmpty) ...[
           _buildYTMusicHeader('Trending Now 🔥', Icons.trending_up_rounded),
           const SizedBox(height: 12),
-          if (controller.isLoadingTrending)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF007AFF))),
-            )
-          else if (controller.trendingSongs.isEmpty)
-            _buildEmptyState(controller)
-          else
-            SizedBox(
-              height: 220,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: controller.trendingSongs.length.clamp(0, 10),
-                itemBuilder: (context, index) {
-                  final song = controller.trendingSongs[index];
-                  return _buildTrendingCard(song, controller, isDark, index);
-                },
-              ),
-            ),
-          const SizedBox(height: 28),
-
-          // ── Suggested For You ──
-          if (controller.trendingSongs.length > 5) ...[
-            _buildYTMusicHeader('Suggested For You', Icons.auto_awesome_rounded),
-            const SizedBox(height: 12),
-            Padding(
+          SizedBox(
+            height: 220,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: controller.trendingSongs
-                    .skip(5)
-                    .take(8)
-                    .map((song) => _buildSuggestedTile(song, controller, isDark))
-                    .toList(),
-              ),
+              itemCount: controller.trendingSongs.length.clamp(0, 15),
+              itemBuilder: (context, index) {
+                final song = controller.trendingSongs[index];
+                return _buildTrendingCard(song, controller, isDark, index);
+              },
             ),
-            const SizedBox(height: 28),
-          ],
+          ),
+          const SizedBox(height: 28),
+        ],
 
-          // ── Browse & Discover ──
-          _buildYTMusicHeader('Browse & Discover', Icons.explore_rounded),
+        // ── Offline Cache (Recently Played) ──
+        if (controller.cachedSongs.isNotEmpty) ...[
+          _buildYTMusicHeader('Saved for Offline', Icons.offline_pin_rounded),
           const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 2.4,
-              children: [
-                _buildBrowseCard('Pop Hits', Icons.star_rounded, const Color(0xFFFF6B6B), const Color(0xFFEE5A24)),
-                _buildBrowseCard('Hip Hop', Icons.mic_rounded, const Color(0xFF7C4DFF), const Color(0xFF536DFE)),
-                _buildBrowseCard('Rock', Icons.electric_bolt_rounded, const Color(0xFFFF9800), const Color(0xFFFF5722)),
-                _buildBrowseCard('Classical', Icons.piano_rounded, const Color(0xFF26C6DA), const Color(0xFF0097A7)),
-                _buildBrowseCard('EDM', Icons.headphones_rounded, const Color(0xFFE040FB), const Color(0xFFAB47BC)),
-                _buildBrowseCard('Chill', Icons.spa_rounded, const Color(0xFF66BB6A), const Color(0xFF388E3C)),
-              ],
+          SizedBox(
+            height: 170,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: controller.cachedSongs.length,
+              itemBuilder: (context, index) {
+                final song = controller.cachedSongs[index];
+                return _buildRecentCard(song, controller, isDark);
+              },
+            ),
+          ),
+          const SizedBox(height: 28),
+        ],
+
+        // ── Browse All ──
+        _buildYTMusicHeader('Browse All', Icons.grid_view_rounded),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 1.6,
+            children: [
+              _buildBrowseCard('Pop Hits', Icons.star_rounded, const Color(0xFFFF6B6B), const Color(0xFFEE5A24)),
+              _buildBrowseCard('Desi Hip Hop', Icons.mic_rounded, const Color(0xFF7C4DFF), const Color(0xFF536DFE)),
+              _buildBrowseCard('Punjabi', Icons.electric_bolt_rounded, const Color(0xFFFF9800), const Color(0xFFFF5722)),
+              _buildBrowseCard('Bollywood', Icons.favorite_rounded, const Color(0xFFE91E63), const Color(0xFFC2185B)),
+              _buildBrowseCard('Nostalgic', Icons.history_rounded, const Color(0xFF26C6DA), const Color(0xFF0097A7)),
+              _buildBrowseCard('Chill', Icons.spa_rounded, const Color(0xFF66BB6A), const Color(0xFF388E3C)),
+            ],  ],
             ),
           ),
           const SizedBox(height: 120),
@@ -1020,7 +1073,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       decoration: BoxDecoration(color: const Color(0xFF007AFF).withOpacity(0.1), shape: BoxShape.circle),
                       child: const Icon(Icons.download_rounded, color: Color(0xFF007AFF)),
                     ),
-                    title: const Text('Download', style: TextStyle(fontWeight: FontWeight.w600)),
+                    title: const Text('Offline Cache', style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text('Save to device cache'),
                     onTap: () {
                       Navigator.pop(ctx);
                       _downloadSong(song, controller);
@@ -1234,20 +1288,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
     final audioController = context.read<AudioPlayerController>();
     
     // Get the stream URL or cached path
-    final url = await controller.getStreamUrl(song);
-    
-    if (url == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Unable to play this song. Please try again.'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          ),
-        );
+    String? url;
+    if (controller.isCached(song.id)) {
+      url = controller.cacheService.getCachedPath(song.id);
+    } else if (song.source == 'jiosaavn') {
+      url = await controller.getStreamUrl(song);
+      if (url == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Unable to play this song. Please try again.'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          );
+        }
+        return;
       }
-      return;
+    } else {
+      // For YouTube, AudioPlayerController handles downloading natively 
+      // Bypassing getStreamUrl prevents redundant API queries (causing 429 errors)
+      url = null;
     }
 
     // Play using the audio controller
@@ -1276,8 +1338,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
         SnackBar(
           content: Text(
             success
-                ? '${song.title} downloaded successfully!'
-                : 'Failed to download ${song.title}',
+                ? '${song.title} cached for offline play!'
+                : 'Failed to cache ${song.title}',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
           backgroundColor: success ? const Color(0xFF1DB954) : Colors.redAccent,

@@ -421,10 +421,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
       builder: (context, snapshot) {
         final remaining = snapshot.data;
         if (remaining == null) return const SizedBox.shrink();
+        
+        final isEndOfTrack = remaining.inSeconds == -1;
+        final displayText = isEndOfTrack 
+            ? "End of Track" 
+            : "${remaining.inMinutes}:${(remaining.inSeconds % 60).toString().padLeft(2, '0')}";
+            
         return Padding(
           padding: const EdgeInsets.only(right: 8.0, top: 18),
           child: Text(
-            "${remaining.inMinutes}:${(remaining.inSeconds % 60).toString().padLeft(2, '0')}",
+            displayText,
             style: const TextStyle(color: Color(0xFF007AFF), fontWeight: FontWeight.bold),
           ),
         );
@@ -567,6 +573,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
               Wrap(spacing: 10, runSpacing: 10, children: [
                 for (var m in [5, 10, 15, 30, 60])
                   _buildTimerButton(context, controller, m),
+                
+                ElevatedButton(
+                  onPressed: () {
+                    controller.setSleepTimerEndOfTrack();
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007AFF),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text("End of Track", style: TextStyle(color: Colors.white)),
+                ),
               ]),
               const SizedBox(height: 20),
               if (controller.isSleepTimerActive)

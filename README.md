@@ -24,29 +24,23 @@ A feature-rich offline music player application built with Flutter. Enjoy your l
 
 ## ✨ Features
 
-### 🎵 Music Playback
-- **Offline Playback** - Play local audio files directly from your device
-- **Background Playback** - Continue listening while using other apps
-- **Lock Screen Controls** - Control playback from notification and lock screen
-- **Shuffle & Repeat** - Multiple playback modes
+### 🎧 Online Music Streaming
+- **JioSaavn & YouTube Integration** - Search and stream directly from the largest online catalog.
+- **Trending & Explore** - Discover new music filtered by your preferred language (Hindi, English, Punjabi, Tamil, Telugu, Malayalam).
+- **Download for Offline Use** - Cache streaming songs locally with one tap to listen without internet.
+- **Smart Fallbacks** - Cross-references JioSaavn and YouTube dynamically to ensure high availability.
 
-### 📚 Library Management
-- **Library Screen** - Browse all songs with album artwork
-- **Favorites** - Mark songs as favorites with quick access and **Play All** button
-- **Playlists** - Create and manage custom playlists
-- **Folders** - Browse music organized by folders
-- **Search & Filter** - Quickly find your favorite tracks
+### 🎵 Local Music Playback
+- **Offline Library** - Play local audio files directly from your device storage seamlessly.
+- **Background Playback & Lock Screen** - Control playback from notification and lock screen via `audio_service`.
+- **Folder Selection** - Filter exactly which directories to scan for local music (excludes voice memos!).
+- **Playlists & Favorites** - Create your perfect custom collections mixing local and streaming songs.
 
-### ⚙️ Settings & Customization
-- **Theme Support** - Light, Dark, and System default themes
-- **Music Folders** - Select which folders to scan (exclude call recordings!)
-- **Minimum Duration Filter** - Filter out short audio files (30s to 5min)
-- **Rescan Library** - Refresh your music library anytime
-
-### 🎨 Beautiful UI
-- Modern, clean interface with smooth animations
-- Album artwork display
-- Responsive design for all screen sizes
+### ⚙️ Premium Utilities
+- **Sleep Timer** - Automatically pause playback after a set time, or precisely at the **End of the Track**.
+- **In-App Updater** - Automatically checks GitHub for new `.apk` releases and installs updates over-the-air!
+- **Theme Support** - Glassmorphism UI with Apple-inspired premium Light & Dark themes.
+- **Custom Filters** - Hide short tracks via the customizable minimum duration filter.
 
 ---
 

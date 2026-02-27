@@ -10,6 +10,7 @@ class StreamSongModel {
   final String? localPath;
   final String? cachedPath;
   final DateTime? cachedAt;
+  final String source;
 
   const StreamSongModel({
     required this.id,
@@ -22,6 +23,7 @@ class StreamSongModel {
     this.localPath,
     this.cachedPath,
     this.cachedAt,
+    this.source = 'youtube',
   });
 
   /// Check if this song is available offline (local or cached)
@@ -42,6 +44,7 @@ class StreamSongModel {
     String? localPath,
     String? cachedPath,
     DateTime? cachedAt,
+    String? source,
   }) {
     return StreamSongModel(
       id: id ?? this.id,
@@ -54,6 +57,7 @@ class StreamSongModel {
       localPath: localPath ?? this.localPath,
       cachedPath: cachedPath ?? this.cachedPath,
       cachedAt: cachedAt ?? this.cachedAt,
+      source: source ?? this.source,
     );
   }
 
@@ -72,6 +76,28 @@ class StreamSongModel {
       thumbnailUrl: thumbnailUrl,
       duration: duration,
       isLocal: false,
+      source: 'youtube',
+    );
+  }
+
+  /// Create from JioSaavn search result
+  factory StreamSongModel.fromJioSaavn({
+    required String songId,
+    required String title,
+    required String artist,
+    String? album,
+    String? thumbnailUrl,
+    required Duration duration,
+  }) {
+    return StreamSongModel(
+      id: songId,
+      title: title,
+      artist: artist,
+      album: album,
+      thumbnailUrl: thumbnailUrl,
+      duration: duration,
+      isLocal: false,
+      source: 'jiosaavn',
     );
   }
 
@@ -88,6 +114,7 @@ class StreamSongModel {
       'localPath': localPath,
       'cachedPath': cachedPath,
       'cachedAt': cachedAt?.toIso8601String(),
+      'source': source,
     };
   }
 
@@ -106,6 +133,7 @@ class StreamSongModel {
       cachedAt: json['cachedAt'] != null 
           ? DateTime.parse(json['cachedAt'] as String)
           : null,
+      source: json['source'] as String? ?? (json['isLocal'] == true ? 'local' : 'youtube'),
     );
   }
 
@@ -121,6 +149,6 @@ class StreamSongModel {
 
   @override
   String toString() {
-    return 'StreamSongModel{id: $id, title: $title, artist: $artist, isLocal: $isLocal}';
+    return 'StreamSongModel{id: $id, title: $title, artist: $artist, isLocal: $isLocal, source: $source}';
   }
 }

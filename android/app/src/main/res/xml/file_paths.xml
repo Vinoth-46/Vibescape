@@ -2,4 +2,7 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Temporary directory for APK downloads (in-app updates) -->
     <cache-path name="apk_cache" path="." />
+    <!-- External directory for APK downloads -->
+    <external-files-path name="apk_external" path="." />
+    <external-path name="external_files" path="." />
 </paths>

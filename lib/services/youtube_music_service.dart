@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../models/stream_song_model.dart';
+import '../secrets.dart';
 
 /// Quality levels for streaming based on network conditions
 enum StreamingQuality {
@@ -17,7 +18,7 @@ enum StreamingQuality {
 class YouTubeMusicService {
   final YoutubeExplode _yt = YoutubeExplode();
   StreamingQuality _preferredQuality = StreamingQuality.high;
-  static const String _youtubeApiKey = 'AIzaSyCKKQYGUGiZz6xI7skyLBJL7npLrQICMIE';
+  static const String _youtubeApiKey = Secrets.youtubeApiKey;
   
   /// Set preferred streaming quality
   void setQuality(StreamingQuality quality) {

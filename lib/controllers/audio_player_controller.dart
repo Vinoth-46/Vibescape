@@ -78,7 +78,12 @@ class AudioPlayerController extends ChangeNotifier {
   }
 
   // Unified current playing song for UI
-  bool get isPlayingStream => _currentStreamSong != null;
+  bool get isPlayingStream {
+    final mediaItem = _audioHandler?.mediaItem.value;
+    if (mediaItem == null) return false;
+    return mediaItem.extras?['isStream'] == true;
+  }
+  
   dynamic get currentPlayingSong => isPlayingStream ? currentStreamSong : currentLocalSong;
 
   // For backward compatibility until UI is fully swapped
@@ -385,8 +390,18 @@ class AudioPlayerController extends ChangeNotifier {
   }
 
   // Current streaming song for display purposes
-  StreamSongModel? _currentStreamSong;
-  StreamSongModel? get currentStreamSong => _currentStreamSong;
+  StreamSongModel? get currentStreamSong {
+    final mediaItem = _audioHandler?.mediaItem.value;
+    if (mediaItem == null || mediaItem.extras?['isStream'] != true) return null;
+    
+    return StreamSongModel.fromJioSaavn(
+       songId: mediaItem.id,
+       title: mediaItem.title,
+       artist: mediaItem.artist ?? "Unknown",
+       thumbnailUrl: mediaItem.artUri?.toString(),
+       duration: mediaItem.duration ?? Duration.zero,
+    );
+  }
 
   /// Play a streaming song from YouTube
   Future<void> playStreamSong(StreamSongModel song, {String? streamUrl, bool autoPlay = true, List<StreamSongModel>? playlist}) async {
@@ -397,9 +412,6 @@ class AudioPlayerController extends ChangeNotifier {
 
     try {
       debugPrint("AudioPlayerController: Playing stream: ${song.title}");
-      
-      // Store current streaming song
-      _currentStreamSong = song;
       notifyListeners();
       
       // Create MediaItem for the stream
@@ -431,7 +443,6 @@ class AudioPlayerController extends ChangeNotifier {
 
       if (finalUrl == null) {
         debugPrint("AudioPlayerController: Failed to get stream URL for ${song.title}");
-        _currentStreamSong = null;
         notifyListeners();
         return;
       }
@@ -448,58 +459,95 @@ class AudioPlayerController extends ChangeNotifier {
       if (_audioHandler is MyAudioHandler) {
         final handler = _audioHandler as MyAudioHandler;
         
-        if (playlist != null && playlist.isNotEmpty) {
-          // Find index of chosen song in playlist, default 0
-          int initialIndex = playlist.indexWhere((s) => s.id == song.id);
-          if (initialIndex == -1) initialIndex = 0;
-          
-          debugPrint("AudioPlayerController: Loading playlist of ${playlist.length} songs at index $initialIndex");
-          
-          // CRITICAL FIX: Fetch fresh URLs lazily when skipping
-          final sources = playlist.map((s) {
-            String tempUrl = s.cachedPath ?? 'https://example.com/placeholder-for-lazy-load.mp3';  
-            return s.id == song.id 
-                ? source 
-                : AudioSource.uri(
-                    Uri.parse(tempUrl),
-                    tag: MediaItem(
-                      id: s.id,
-                      album: s.album ?? "Streaming Music",
-                      artist: s.artist,
-                      title: s.title,
-                      artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
-                      extras: {'source': s.source, 'isStream': true},
-                    ),
-                 );
-          }).toList();
-          
-          await handler.setPlaylist(sources, initialIndex);
-          
-          // Tell handler this is a streaming queue so it can re-fetch URLs lazily on skip
-          final playlistJson = playlist.map((s) => s.toJson()).toList();
-          await handler.customAction('setStreamingQueue', {'isStreamingQueue': true, 'playlist': playlistJson});
-        } else {
-          await handler.setPlaylist([source], 0);
+        List<StreamSongModel> activeQueue = playlist ?? [song];
+        
+        // Auto-Radio Queue Generation (if user plays a single searched song, auto-fill!)
+        if (playlist == null || playlist.length <= 1) {
+           debugPrint("AudioPlayerController: Playing single song, spinning up Auto-Radio Queue in background...");
+           activeQueue = [song]; // Play instantly
+           
+           // Fetch similar songs in the background without blocking playback
+           JioSaavnMusicService().getSimilarSongs(song.id).then((recommended) async {
+             if (recommended.isNotEmpty) {
+                 debugPrint("AudioPlayerController: Auto-Radio found ${recommended.length} songs. Appending to queue...");
+                 final fullQueue = [song, ...recommended];
+                 
+                 final sources = fullQueue.map((s) {
+                   String tempUrl = s.cachedPath ?? 'https://example.com/placeholder-for-lazy-load.mp3';  
+                   return s.id == song.id 
+                       ? source 
+                       : AudioSource.uri(
+                           Uri.parse(tempUrl),
+                           tag: MediaItem(
+                             id: s.id,
+                             album: s.album ?? "Streaming Music",
+                             artist: s.artist,
+                             title: s.title,
+                             artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
+                             extras: {'source': s.source, 'isStream': true},
+                           ),
+                        );
+                 }).toList();
+                 
+                 await handler.setPlaylist(sources, 0);
+                 final playlistJson = fullQueue.map((s) => s.toJson()).toList();
+                 await handler.customAction('setStreamingQueue', {'isStreamingQueue': true, 'playlist': playlistJson});
+             }
+           });
         }
         
-        if (autoPlay) {
-          await handler.play();
+        // Find index of chosen song in playlist, default 0
+        int initialIndex = activeQueue.indexWhere((s) => s.id == song.id);
+        if (initialIndex == -1) initialIndex = 0;
+        
+        debugPrint("AudioPlayerController: Loading playlist of ${activeQueue.length} songs at index $initialIndex");
+        
+        // CRITICAL FIX: Fetch fresh URLs lazily when skipping
+        final sources = activeQueue.map((s) {
+          String tempUrl = s.cachedPath ?? 'https://example.com/placeholder-for-lazy-load.mp3';  
+          return s.id == song.id 
+              ? source 
+              : AudioSource.uri(
+                  Uri.parse(tempUrl),
+                  tag: MediaItem(
+                    id: s.id,
+                    album: s.album ?? "Streaming Music",
+                    artist: s.artist,
+                    title: s.title,
+                    artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
+                    extras: {'source': s.source, 'isStream': true},
+                  ),
+               );
+        }).toList();
+        
+        await handler.setPlaylist(sources, initialIndex);
+        
+        // Tell handler this is a streaming queue so it can re-fetch URLs lazily on skip
+        final playlistJson = activeQueue.map((s) => s.toJson()).toList();
+        await handler.customAction('setStreamingQueue', {'isStreamingQueue': true, 'playlist': playlistJson});
+        } else {
+        if (_audioHandler is MyAudioHandler) {
+          final MyAudioHandler h = _audioHandler as MyAudioHandler;
+          await h.setPlaylist([source], 0);
+          await h.customAction('setStreamingQueue', {'isStreamingQueue': true, 'playlist': [song.toJson()]});
         }
-        debugPrint("AudioPlayerController: Stream playback started");
       }
       
+      if (autoPlay) {
+        await _audioHandler?.play();
+      }
+      debugPrint("AudioPlayerController: Stream playback started");
       notifyListeners();
+      
     } catch (e, stack) {
       debugPrint("AudioPlayerController: Error playing stream: $e");
       debugPrint("Stack trace: $stack");
-      _currentStreamSong = null;
       notifyListeners();
     }
   }
 
   /// Clear current stream song (when switching to local)
   void clearStreamSong() {
-    _currentStreamSong = null;
     notifyListeners();
   }
 }

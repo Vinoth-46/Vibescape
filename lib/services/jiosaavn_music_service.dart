@@ -58,6 +58,28 @@ class JioSaavnMusicService {
     }
   }
 
+  /// Get recommended/similar music based on a song ID (For Auto-Radio Queue)
+  Future<List<StreamSongModel>> getSimilarSongs(String songId) async {
+    try {
+      final response = await http.get(
+        // API v4 uses /songs/{id}/suggestions for recommended songs
+        Uri.parse('$baseUrl/songs/$songId/suggestions'),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        if (data['success'] == true && data['data'] != null) {
+          final results = data['data'] as List<dynamic>? ?? [];
+          return results.map((song) => _parseSong(song)).whereType<StreamSongModel>().toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint('JioSaavnMusicService: Auto-Radio recommendations error: $e');
+      return [];
+    }
+  }
+
   /// Get the direct audio stream URL for a song
   Future<String?> getStreamUrl(String songId) async {
     try {

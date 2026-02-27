@@ -4,6 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:audio_service/audio_service.dart';
 import '../controllers/audio_player_controller.dart';
 import '../controllers/favorites_controller.dart';
 import '../controllers/playlist_controller.dart';
@@ -83,6 +84,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
           IconButton(
             onPressed: () => _showSleepTimerBottomSheet(context, audio),
             icon: Icon(Icons.access_time_rounded, color: textPrimary),
+          ),
+          IconButton(
+            onPressed: () => _showQueueBottomSheet(context, audio),
+            icon: Icon(Icons.queue_music_rounded, color: textPrimary),
           ),
           const SizedBox(width: 8),
         ],
@@ -602,6 +607,118 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+void _showQueueBottomSheet(BuildContext context, AudioPlayerController controller) {
+  final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+  
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: isDarkMode ? const Color(0xFF1A1C29) : Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    builder: (context) {
+      return DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.9,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (_, scrollController) {
+          return Column(
+            children: [
+              // Header
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.white24 : Colors.black26,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Text("Up Next", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              ),
+              
+              // Queue List
+              Expanded(
+                child: StreamBuilder<List<MediaItem>>(
+                  stream: controller.queueStream,
+                  builder: (context, snapshot) {
+                    final queue = snapshot.data ?? [];
+                    if (queue.isEmpty) {
+                      return Center(
+                        child: Text("Queue is empty", style: TextStyle(color: isDarkMode ? Colors.white60 : Colors.black54)),
+                      );
+                    }
+
+                    return ReorderableListView.builder(
+                      scrollController: scrollController,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: queue.length,
+                      onReorder: (oldIndex, newIndex) {
+                        controller.reorderQueue(oldIndex, newIndex);
+                      },
+                      itemBuilder: (context, index) {
+                        final item = queue[index];
+                        final isPlaying = controller.handler?.mediaItem.value?.id == item.id;
+                        
+                        return ListTile(
+                          key: ValueKey(item.id),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: item.artUri != null
+                                ? CachedNetworkImage(
+                                    imageUrl: item.artUri.toString(),
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Container(color: Colors.grey[800]),
+                                    errorWidget: (context, url, error) => const Icon(Icons.music_note),
+                                  )
+                                : Container(
+                                    width: 50,
+                                    height: 50,
+                                    color: Colors.grey[800],
+                                    child: const Icon(Icons.music_note, color: Colors.white),
+                                  ),
+                          ),
+                          title: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal,
+                              color: isPlaying ? const Color(0xFF1DB954) : (isDarkMode ? Colors.white : Colors.black87),
+                            ),
+                          ),
+                          subtitle: Text(
+                            item.artist ?? "Unknown Artist",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isDarkMode ? Colors.white60 : Colors.black54,
+                            ),
+                          ),
+                          trailing: const Icon(Icons.drag_handle_rounded, color: Colors.grey),
+                          onTap: () {
+                            // Implement skip to queue index
+                            controller.handler?.skipToQueueItem(index);
+                            Navigator.pop(context);
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
   Widget _buildTimerButton(BuildContext context, AudioPlayerController controller, int minutes) {
     return ElevatedButton(
       onPressed: () {

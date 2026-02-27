@@ -75,8 +75,12 @@ class YoutubeStreamAudioSource extends StreamAudioSource {
   Future<StreamAudioResponse> request([int? start, int? end]) async {
     final bytes = await _getBytes();
     
-    final startByte = start ?? 0;
-    final endByte = end ?? bytes.length;
+    int startByte = start ?? 0;
+    if (startByte < 0) startByte = 0;
+    
+    int endByte = end ?? bytes.length;
+    if (endByte > bytes.length) endByte = bytes.length;
+    if (startByte > endByte) startByte = endByte;
 
     debugPrint('YoutubeStreamAudioSource: request($startByte-$endByte / ${bytes.length}) for $videoId');
 

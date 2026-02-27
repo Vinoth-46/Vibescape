@@ -34,15 +34,16 @@ class YouTubeMusicService {
           'https://www.googleapis.com/youtube/v3/search?part=snippet&q=${Uri.encodeComponent(query)}&type=video&key=$_youtubeApiKey&maxResults=20&videoCategoryId=10')).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         final items = data['items'] as List<dynamic>? ?? [];
 
         final songs = <StreamSongModel>[];
         for (final item in items) {
           final snippet = item['snippet'];
-          // Using unescape logic indirectly by not touching it, or unescaping HTML entities if needed.
-          // The title from snippet could contain HTML entities like &amp;
-          String title = snippet['title']?.toString().replaceAll('&amp;', '&').replaceAll('&quot;', '"') ?? '';
+          String title = snippet['title']?.toString() ?? '';
+          title = _unescapeHtml(title);
+          String artist = snippet['channelTitle']?.toString() ?? '';
+          artist = _unescapeHtml(artist);
           
           songs.add(StreamSongModel.fromYouTube(
             videoId: item['id']['videoId'],
@@ -88,7 +89,7 @@ class YouTubeMusicService {
           'https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&chart=mostPopular&regionCode=IN&videoCategoryId=10&key=$_youtubeApiKey&maxResults=15')).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         final items = data['items'] as List<dynamic>? ?? [];
 
         final songs = <StreamSongModel>[];
@@ -106,8 +107,8 @@ class YouTubeMusicService {
 
           songs.add(StreamSongModel.fromYouTube(
             videoId: item['id'],
-            title: snippet['title'],
-            artist: snippet['channelTitle'],
+            title: _unescapeHtml(snippet['title']?.toString() ?? ''),
+            artist: _unescapeHtml(snippet['channelTitle']?.toString() ?? ''),
             thumbnailUrl: snippet['thumbnails']?['high']?['url'] ?? snippet['thumbnails']?['default']?['url'],
             duration: parsedDuration,
           ));
@@ -203,6 +204,15 @@ class YouTubeMusicService {
     return streams.first;
   }
 
+  String _unescapeHtml(String text) {
+    return text.replaceAll('&amp;', '&')
+               .replaceAll('&quot;', '"')
+               .replaceAll('&#039;', "'")
+               .replaceAll('&#39;', "'")
+               .replaceAll('&lt;', '<')
+               .replaceAll('&gt;', '>');
+  }
+  
   /// Auto-detect quality based on network
   Future<StreamingQuality> detectNetworkQuality() async {
     try {

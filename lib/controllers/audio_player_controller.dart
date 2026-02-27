@@ -79,6 +79,17 @@ class AudioPlayerController extends ChangeNotifier {
   // Queue/Shuffle/Loop
   Stream<List<MediaItem>> get queueStream =>
       _audioHandler?.queue ?? Stream.value([]);
+      
+  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+    if (_audioHandler == null) return;
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    await _audioHandler!.customAction('reorder', {
+      'oldIndex': oldIndex,
+      'newIndex': newIndex,
+    });
+  }
 
   bool _isShuffleModeEnabled = false;
   bool get isShuffleModeEnabled => _isShuffleModeEnabled;
@@ -370,7 +381,7 @@ class AudioPlayerController extends ChangeNotifier {
   StreamSongModel? get currentStreamSong => _currentStreamSong;
 
   /// Play a streaming song from YouTube
-  Future<void> playStreamSong(StreamSongModel song, {String? streamUrl, bool autoPlay = true}) async {
+  Future<void> playStreamSong(StreamSongModel song, {String? streamUrl, bool autoPlay = true, List<StreamSongModel>? playlist}) async {
     if (_audioHandler == null) {
       debugPrint("AudioPlayerController: Handler is null, cannot play stream");
       return;
@@ -424,7 +435,27 @@ class AudioPlayerController extends ChangeNotifier {
 
       if (_audioHandler is MyAudioHandler) {
         final handler = _audioHandler as MyAudioHandler;
-        await handler.setPlaylist([source], 0);
+        
+        if (playlist != null && playlist.isNotEmpty) {
+          // Find index of chosen song in playlist, default 0
+          int initialIndex = playlist.indexWhere((s) => s.id == song.id);
+          if (initialIndex == -1) initialIndex = 0;
+          
+          debugPrint("AudioPlayerController: Loading playlist of ${playlist.length} songs at index $initialIndex");
+          
+          // Convert all playlist songs to MediaItems/AudioSources
+          // Note: For background queue, we don't block to fetch URLs for *all* YouTube songs upfront.
+          // We defer fetching their exact stream URLs until they play, via custom ResolvingAudioSource or similar.
+          // For simplicity right now, we will add the immediate song, then build a basic queue.
+          
+          // Actually, since we need YouTube stream URLs just-in-time, we load the list of MediaItems 
+          // and resolve them sequentially. Let's just pass the single source for now 
+          // and build the full queue integration in phase 5.2.
+          await handler.setPlaylist([source], 0);
+        } else {
+          await handler.setPlaylist([source], 0);
+        }
+        
         if (autoPlay) {
           await handler.play();
         }

@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -338,7 +339,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               itemCount: controller.topCharts.length.clamp(0, 15),
               itemBuilder: (context, index) {
                 final song = controller.topCharts[index];
-                return _buildTrendingCard(song, controller, isDark, index);
+                return _buildTrendingCard(song, controller, isDark, index, playlist: controller.topCharts);
               },
             ),
           ),
@@ -358,7 +359,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               itemCount: controller.newReleases.length.clamp(0, 15),
               itemBuilder: (context, index) {
                 final song = controller.newReleases[index];
-                return _buildTrendingCard(song, controller, isDark, index);
+                return _buildTrendingCard(song, controller, isDark, index, playlist: controller.newReleases);
               },
             ),
           ),
@@ -378,7 +379,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               itemCount: controller.trendingSongs.length.clamp(0, 15),
               itemBuilder: (context, index) {
                 final song = controller.trendingSongs[index];
-                return _buildTrendingCard(song, controller, isDark, index);
+                return _buildTrendingCard(song, controller, isDark, index, playlist: controller.trendingSongs);
               },
             ),
           ),
@@ -424,10 +425,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
               _buildBrowseCard('Bollywood', Icons.favorite_rounded, const Color(0xFFE91E63), const Color(0xFFC2185B)),
               _buildBrowseCard('Nostalgic', Icons.history_rounded, const Color(0xFF26C6DA), const Color(0xFF0097A7)),
               _buildBrowseCard('Chill', Icons.spa_rounded, const Color(0xFF66BB6A), const Color(0xFF388E3C)),
-            ],  ],
-            ),
+            ],
           ),
-          const SizedBox(height: 120),
+        ),
+        const SizedBox(height: 120),
         ],
       ),
     );
@@ -486,7 +487,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Widget _buildRecentCard(StreamSongModel song, stream.StreamController controller, bool isDark) {
     return GestureDetector(
-      onTap: () => _playSong(song, controller),
+      onTap: () => _playSong(song, controller, playlist: controller.cachedSongs),
       onLongPress: () => _showSongOptions(song, controller),
       child: Container(
         width: 130,
@@ -532,9 +533,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
-  Widget _buildTrendingCard(StreamSongModel song, stream.StreamController controller, bool isDark, int index) {
+  Widget _buildTrendingCard(StreamSongModel song, stream.StreamController controller, bool isDark, int index, {List<StreamSongModel>? playlist}) {
     return GestureDetector(
-      onTap: () => _playSong(song, controller),
+      onTap: () => _playSong(song, controller, playlist: playlist),
       onLongPress: () => _showSongOptions(song, controller),
       child: Container(
         width: 165,
@@ -599,7 +600,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   Widget _buildSuggestedTile(StreamSongModel song, stream.StreamController controller, bool isDark) {
     final isCached = controller.isCached(song.id);
     return GestureDetector(
-      onTap: () => _playSong(song, controller),
+      onTap: () => _playSong(song, controller, playlist: controller.trendingSongs),
       onLongPress: () => _showSongOptions(song, controller),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
@@ -1284,14 +1285,28 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Future<void> _playSong(
-      StreamSongModel song, stream.StreamController controller) async {
+      StreamSongModel song, stream.StreamController controller, {List<StreamSongModel>? playlist}) async {
     final audioController = context.read<AudioPlayerController>();
     
     // Get the stream URL or cached path
-    String? url;
-    if (controller.isCached(song.id)) {
-      url = controller.cacheService.getCachedPath(song.id);
-    } else if (song.source == 'jiosaavn') {
+  String? url;
+  if (controller.isCached(song.id)) {
+    final cachedPath = controller.cacheService.getCachedPath(song.id);
+    if (cachedPath != null && File(cachedPath).existsSync()) {
+      url = cachedPath;
+    } else {
+      // Missing or corrupted cached file handle
+      await controller.cacheService.deleteCachedSong(song.id);
+      if (song.source == 'jiosaavn') {
+        url = await controller.getStreamUrl(song);
+      } else {
+        url = null; // Auto handles YouTube refetch natively
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cached file missing. Streaming instead.'), behavior: SnackBarBehavior.floating));
+      }
+    }
+  } else if (song.source == 'jiosaavn') {
       url = await controller.getStreamUrl(song);
       if (url == null) {
         if (mounted) {
@@ -1313,7 +1328,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     }
 
     // Play using the audio controller
-    await audioController.playStreamSong(song, streamUrl: url);
+    await audioController.playStreamSong(song, streamUrl: url, playlist: playlist);
     
     // Navigate to player 
     if (mounted) {

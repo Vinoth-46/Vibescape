@@ -146,6 +146,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  @override
+  Future<dynamic> customAction(String name, [Map<String, dynamic>? extras]) async {
+    if (name == 'reorder') {
+      final oldIndex = extras?['oldIndex'] as int?;
+      final newIndex = extras?['newIndex'] as int?;
+      if (oldIndex != null && newIndex != null) {
+        final currentSource = player.audioSource;
+        if (currentSource is ConcatenatingAudioSource) {
+           // Move item in the audio source
+           await currentSource.move(oldIndex, newIndex);
+        }
+      }
+    }
+  }
+
   // Method to support shuffle
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {

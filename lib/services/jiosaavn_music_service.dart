@@ -22,7 +22,7 @@ class JioSaavnMusicService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         if (data['success'] == true && data['data'] != null) {
           final results = data['data']['results'] as List<dynamic>? ?? [];
           return results.map((song) => _parseSong(song)).whereType<StreamSongModel>().toList();
@@ -45,7 +45,7 @@ class JioSaavnMusicService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         if (data['success'] == true && data['data'] != null) {
           final results = data['data']['results'] as List<dynamic>? ?? [];
           return results.map((song) => _parseSong(song)).whereType<StreamSongModel>().toList();
@@ -66,7 +66,7 @@ class JioSaavnMusicService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = json.decode(utf8.decode(response.bodyBytes));
         if (data['success'] == true && data['data'] != null && data['data'].isNotEmpty) {
           final songData = data['data'][0];
           final downloadUrls = songData['downloadUrl'] as List<dynamic>? ?? [];
@@ -86,17 +86,18 @@ class JioSaavnMusicService {
   StreamSongModel? _parseSong(Map<String, dynamic> song) {
     try {
       final id = song['id']?.toString() ?? '';
-      final title = song['name'] ?? 'Unknown Title';
+      final title = _unescapeHtml(song['name']?.toString() ?? 'Unknown Title');
+      final albumUri = song['album'] != null ? _unescapeHtml(song['album']['name']?.toString() ?? 'Unknown Album') : 'Unknown Album';
       
       // Parse artists
       String artist = 'Unknown Artist';
       if (song['artists'] != null && song['artists']['primary'] != null) {
         final primaryArtists = song['artists']['primary'] as List<dynamic>;
         if (primaryArtists.isNotEmpty) {
-          artist = primaryArtists.map((a) => a['name']).join(', ');
+          artist = _unescapeHtml(primaryArtists.map((a) => a['name']).join(', '));
         }
       } else if (song['primaryArtists'] != null) {
-         artist = song['primaryArtists'].toString();
+         artist = _unescapeHtml(song['primaryArtists'].toString());
       }
 
       // Parse image
@@ -158,5 +159,14 @@ class JioSaavnMusicService {
     }
 
     return selectedUrl != null ? selectedUrl['url']?.toString() : urls.first['url']?.toString();
+  }
+
+  String _unescapeHtml(String text) {
+    return text.replaceAll('&amp;', '&')
+               .replaceAll('&quot;', '"')
+               .replaceAll('&#039;', "'")
+               .replaceAll('&#39;', "'")
+               .replaceAll('&lt;', '<')
+               .replaceAll('&gt;', '>');
   }
 }

@@ -8,6 +8,7 @@ import 'settings_screen.dart';
 import '../controllers/stream_controller.dart' as stream;
 import '../widgets/mini_player.dart';
 import '../widgets/glass_container.dart';
+import '../services/app_update_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -24,7 +25,15 @@ class _MainScreenState extends State<MainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final streamCtrl = Provider.of<stream.StreamController>(context, listen: false);
       streamCtrl.init();
+      _checkForUpdates();
     });
+  }
+
+  Future<void> _checkForUpdates() async {
+    final update = await AppUpdateService.checkForUpdate();
+    if (update != null && mounted) {
+      AppUpdateService.showUpdateDialog(context, update);
+    }
   }
 
   int _selectedIndex = 0;

@@ -178,6 +178,10 @@ class AppUpdateService {
   static Future<String> _getCurrentVersion() async {
     try {
       final info = await PackageInfo.fromPlatform();
+      final buildNum = info.buildNumber;
+      if (buildNum.isNotEmpty) {
+        return '${info.version}+$buildNum';
+      }
       return info.version;
     } catch (e) {
       debugPrint('AppUpdateService: Error getting version: $e');
@@ -193,8 +197,11 @@ class AppUpdateService {
   /// Compare semantic versions: returns true if remote > current
   static bool _isNewerVersion(String remote, String current) {
     try {
-      final remoteParts = remote.split('.').map(int.parse).toList();
-      final currentParts = current.split('.').map(int.parse).toList();
+      final remoteBase = remote.split('+')[0];
+      final currentBase = current.split('+')[0];
+
+      final remoteParts = remoteBase.split('.').map(int.parse).toList();
+      final currentParts = currentBase.split('.').map(int.parse).toList();
 
       // Pad to 3 parts
       while (remoteParts.length < 3) remoteParts.add(0);
@@ -204,7 +211,18 @@ class AppUpdateService {
         if (remoteParts[i] > currentParts[i]) return true;
         if (remoteParts[i] < currentParts[i]) return false;
       }
-      return false;
+      
+      // Compare build numbers if semver matches perfectly
+      int remoteBuild = 0;
+      if (remote.contains('+')) {
+         remoteBuild = int.tryParse(remote.split('+')[1]) ?? 0;
+      }
+      int currentBuild = 0;
+      if (current.contains('+')) {
+         currentBuild = int.tryParse(current.split('+')[1]) ?? 0;
+      }
+      
+      return remoteBuild > currentBuild;
     } catch (e) {
       debugPrint('AppUpdateService: Version comparison error: $e');
       return false;
@@ -217,5 +235,127 @@ class AppUpdateService {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+  }
+
+  /// Global generic dialog that can be called from anywhere
+  static void showUpdateDialog(BuildContext context, AppRelease release) {
+    bool downloading = false;
+    double downloadProgress = 0.0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            backgroundColor: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1A1C2E)
+                : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF007AFF), Color(0xFF00D4FF)],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.system_update_rounded, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text("Update Available",
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "v${release.version}",
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF007AFF)),
+                ),
+                if (release.apkSize != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      AppUpdateService.formatSize(release.apkSize),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                if (release.body != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF007AFF).withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    constraints: const BoxConstraints(maxHeight: 150),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        release.body!,
+                        style: const TextStyle(fontSize: 13, height: 1.5),
+                      ),
+                    ),
+                  ),
+                if (downloading) ...[
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: downloadProgress,
+                      backgroundColor: const Color(0xFF007AFF).withOpacity(0.1),
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFF007AFF)),
+                      minHeight: 6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${(downloadProgress * 100).toInt()}%',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (!downloading) {
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: const Text("Later", style: TextStyle(color: Colors.grey)),
+              ),
+              if (release.apkDownloadUrl != null && !downloading)
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007AFF),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    setDialogState(() => downloading = true);
+                    final filePath = await AppUpdateService.downloadUpdate(
+                      release.apkDownloadUrl!,
+                      onProgress: (p) {
+                        setDialogState(() => downloadProgress = p);
+                      },
+                    );
+                    setDialogState(() => downloading = false);
+                    if (filePath != null && context.mounted) {
+                      Navigator.pop(ctx);
+                      await AppUpdateService.installApk(filePath);
+                    }
+                  },
+                  child: const Text("Download & Install", style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }

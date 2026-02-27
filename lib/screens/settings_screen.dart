@@ -28,8 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _appVersion = "...";
   bool _checkingUpdate = false;
   AppRelease? _availableUpdate;
-  double _downloadProgress = 0;
-  bool _downloading = false;
 
   @override
   void initState() {
@@ -53,7 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _availableUpdate = update;
       });
       if (update != null) {
-        _showUpdateDialog(update);
+        AppUpdateService.showUpdateDialog(context, update);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -63,121 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     }
-  }
-
-  void _showUpdateDialog(AppRelease release) {
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          return AlertDialog(
-            backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF1A1C2E)
-                : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF007AFF), Color(0xFF00D4FF)],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.system_update_rounded, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                const Text("Update Available",
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "v${release.version}",
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF007AFF)),
-                ),
-                if (release.apkSize != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      AppUpdateService.formatSize(release.apkSize),
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                if (release.body != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF007AFF).withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    constraints: const BoxConstraints(maxHeight: 150),
-                    child: SingleChildScrollView(
-                      child: Text(
-                        release.body!,
-                        style: const TextStyle(fontSize: 13, height: 1.5),
-                      ),
-                    ),
-                  ),
-                if (_downloading) ...[
-                  const SizedBox(height: 16),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: _downloadProgress,
-                      backgroundColor: const Color(0xFF007AFF).withOpacity(0.1),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF007AFF)),
-                      minHeight: 6,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${(_downloadProgress * 100).toInt()}%',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text("Later", style: TextStyle(color: Colors.grey)),
-              ),
-              if (release.apkDownloadUrl != null && !_downloading)
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007AFF),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () async {
-                    setState(() => _downloading = true);
-                    setDialogState(() {});
-                    final filePath = await AppUpdateService.downloadUpdate(
-                      release.apkDownloadUrl!,
-                      onProgress: (p) {
-                        setState(() => _downloadProgress = p);
-                        setDialogState(() {});
-                      },
-                    );
-                    setState(() => _downloading = false);
-                    if (filePath != null && mounted) {
-                      Navigator.pop(ctx);
-                      await AppUpdateService.installApk(filePath);
-                    }
-                  },
-                  child: const Text("Download & Install", style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
-            ],
-          );
-        },
-      ),
-    );
   }
 
   Future<void> _loadCacheSize() async {
@@ -672,7 +555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.5)),
                     const SizedBox(height: 4),
-                    Text("Lead App Architect",
+                    Text("App Developer",
                         style: TextStyle(
                             color: const Color(0xFF007AFF).withOpacity(0.8),
                             fontWeight: FontWeight.w600,

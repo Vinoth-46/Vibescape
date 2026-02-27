@@ -443,15 +443,33 @@ class AudioPlayerController extends ChangeNotifier {
           
           debugPrint("AudioPlayerController: Loading playlist of ${playlist.length} songs at index $initialIndex");
           
-          // Convert all playlist songs to MediaItems/AudioSources
-          // Note: For background queue, we don't block to fetch URLs for *all* YouTube songs upfront.
-          // We defer fetching their exact stream URLs until they play, via custom ResolvingAudioSource or similar.
-          // For simplicity right now, we will add the immediate song, then build a basic queue.
+          // Convert all playlist songs to AudioSources.
+          // Note: YouTube URLs are expensive to fetch upfront, so ideally we would use 
+          // ResolvingAudioSources. However, since they rely on the native ExoPlayer plugin natively, 
+          // we inject them as URI sources alongside JioSaavn proxy URLs, and fetch dynamic sources on skip.
+          // For now, we will map them into basic URI sources. If a URL is missing (eg: youtube streams),
+          // it won't play until we resolve it right before playback in a real ResolvingSource. 
+          // To keep it simple, we load the clicked song properly as `source`, and others as placeholders.
           
-          // Actually, since we need YouTube stream URLs just-in-time, we load the list of MediaItems 
-          // and resolve them sequentially. Let's just pass the single source for now 
-          // and build the full queue integration in phase 5.2.
-          await handler.setPlaylist([source], 0);
+          final sources = playlist.map((s) {
+            if (s.id == song.id) {
+               return source; // use the fully resolved source for the active song
+            } else {
+               // Placeholder for un-resolved background queue items
+               String tempUrl = s.cachedPath ?? 'https://example.com/placeholder.mp3';  
+               return AudioSource.uri(
+                  Uri.parse(tempUrl),
+                  tag: MediaItem(
+                    id: s.id,
+                    album: s.artist,
+                    title: s.title,
+                    artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
+                  ),
+               );
+            }
+          }).toList();
+          
+          await handler.setPlaylist(sources, initialIndex);
         } else {
           await handler.setPlaylist([source], 0);
         }

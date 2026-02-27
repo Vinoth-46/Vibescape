@@ -87,7 +87,6 @@ class JioSaavnMusicService {
     try {
       final id = song['id']?.toString() ?? '';
       final title = _unescapeHtml(song['name']?.toString() ?? 'Unknown Title');
-      final albumUri = song['album'] != null ? _unescapeHtml(song['album']['name']?.toString() ?? 'Unknown Album') : 'Unknown Album';
       
       // Parse artists
       String artist = 'Unknown Artist';

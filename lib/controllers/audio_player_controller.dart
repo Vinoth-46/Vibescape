@@ -10,6 +10,7 @@ import '../services/sleep_timer_service.dart';
 import '../services/folder_selection_service.dart';
 import '../models/stream_song_model.dart';
 import '../services/youtube_music_service.dart';
+import '../services/jiosaavn_music_service.dart';
 
 class AudioPlayerController extends ChangeNotifier {
   // Lazy initialization of OnAudioQuery
@@ -414,30 +415,34 @@ class AudioPlayerController extends ChangeNotifier {
 
       // Determine the audio source to play
       AudioSource source;
+      
+      String? finalUrl = streamUrl;
+
+      // Get fresh URL if not provided directly (e.g., when a guest joins a Party Room)
+      if (finalUrl == null || finalUrl.isEmpty) {
+        if (song.source == 'jiosaavn') {
+          debugPrint("AudioPlayerController: Fetching stream URL for JioSaavn song ${song.id}...");
+          finalUrl = await JioSaavnMusicService().getStreamUrl(song.id);
+        } else {
+          debugPrint("AudioPlayerController: Fetching stream URL for YouTube song ${song.id}...");
+          finalUrl = await YouTubeMusicService().getStreamUrl(song.id);
+        }
+      }
+
+      if (finalUrl == null) {
+        debugPrint("AudioPlayerController: Failed to get stream URL for ${song.title}");
+        _currentStreamSong = null;
+        notifyListeners();
+        return;
+      }
 
       // Check if there's a local cached file already provided
-      if (streamUrl != null && !streamUrl.startsWith('http')) {
-        debugPrint("AudioPlayerController: Playing from cache: $streamUrl");
-        source = AudioSource.uri(Uri.file(streamUrl), tag: mediaItem);
-      } else if (song.source == 'jiosaavn') {
-        // JioSaavn streams don't need ExoPlayer bypass, play directly
-        debugPrint("AudioPlayerController: Playing JioSaavn stream directly");
-        source = AudioSource.uri(Uri.parse(streamUrl!), tag: mediaItem);
+      if (!finalUrl.startsWith('http')) {
+        debugPrint("AudioPlayerController: Playing from cache: $finalUrl");
+        source = AudioSource.uri(Uri.file(finalUrl), tag: mediaItem);
       } else {
-        // Fetch the YouTube Stream URL natively instead of downloading it to a file
-        // This prevents ExoPlayer from cutting off streaming after <1 min
-        debugPrint("AudioPlayerController: Fetching stream URL for ${song.id}...");
-        final ytUrl = await YouTubeMusicService().getStreamUrl(song.id);
-        
-        if (ytUrl == null) {
-          debugPrint("AudioPlayerController: Failed to get stream URL for ${song.id}");
-          _currentStreamSong = null;
-          notifyListeners();
-          return;
-        }
-        
-        debugPrint("AudioPlayerController: Playing YouTube stream directly");
-        source = AudioSource.uri(Uri.parse(ytUrl), tag: mediaItem);
+        debugPrint("AudioPlayerController: Playing stream directly");
+        source = AudioSource.uri(Uri.parse(finalUrl), tag: mediaItem);
       }
 
       if (_audioHandler is MyAudioHandler) {

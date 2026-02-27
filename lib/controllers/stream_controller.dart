@@ -79,26 +79,18 @@ class StreamController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final ytFuture = _youtubeService.searchSongs(query);
-      final saavnFuture = _jiosaavnService.searchSongs(query);
+      final saavnSongs = await _jiosaavnService.searchSongs(query);
       
-      final results = await Future.wait([ytFuture, saavnFuture]);
-      final ytSongs = results[0];
-      final saavnSongs = results[1];
-      
-      // Combine results alternating
-      final combined = <StreamSongModel>[];
-      int maxLength = ytSongs.length > saavnSongs.length ? ytSongs.length : saavnSongs.length;
-      
-      for (int i = 0; i < maxLength; i++) {
-        if (i < saavnSongs.length) combined.add(saavnSongs[i]);
-        if (i < ytSongs.length) combined.add(ytSongs[i]);
+      if (saavnSongs.isNotEmpty) {
+        _searchResults = saavnSongs;
+      } else {
+        debugPrint('StreamController: JioSaavn returned empty, falling back to YouTube');
+        _searchResults = await _youtubeService.searchSongs(query);
       }
-      
-      _searchResults = combined;
     } catch (e) {
       debugPrint('StreamController: Search error: $e');
-      _searchResults = [];
+      // If JioSaavn crashes entirely, try YouTube
+       _searchResults = await _youtubeService.searchSongs(query);
     }
 
     _isSearching = false;
@@ -133,23 +125,16 @@ class StreamController extends ChangeNotifier {
 
   Future<List<StreamSongModel>> _fetchCombined(String query) async {
       try {
-        final ytFuture = _youtubeService.searchSongs(query);
-        final saavnFuture = _jiosaavnService.searchSongs(query);
-        final results = await Future.wait([ytFuture, saavnFuture]);
-        
-        final ytSongs = results[0];
-        final saavnSongs = results[1];
-        
-        final combined = <StreamSongModel>[];
-        int maxLength = ytSongs.length > saavnSongs.length ? ytSongs.length : saavnSongs.length;
-        for (int i = 0; i < maxLength; i++) {
-          if (i < saavnSongs.length) combined.add(saavnSongs[i]);
-          if (i < ytSongs.length) combined.add(ytSongs[i]);
+        final saavnSongs = await _jiosaavnService.searchSongs(query);
+        if (saavnSongs.isNotEmpty) {
+          return saavnSongs;
         }
-        return combined;
+        
+        debugPrint('StreamController: JioSaavn trending returned empty, falling back to YouTube');
+        return await _youtubeService.searchSongs(query);
       } catch (e) {
         debugPrint('StreamController: Fetch combined error: $e');
-        return [];
+        return await _youtubeService.searchSongs(query);
       }
   }
 

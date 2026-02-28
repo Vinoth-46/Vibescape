@@ -5,7 +5,7 @@ import 'package:rxdart/rxdart.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:offline_music_player/controllers/audio_player_controller.dart';
+import 'package:vibescape/controllers/audio_player_controller.dart';
 import 'audio_player_controller_test.mocks.dart';
 
 @GenerateMocks([OnAudioQuery, AudioHandler])

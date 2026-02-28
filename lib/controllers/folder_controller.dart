@@ -7,7 +7,7 @@ import '../services/permission_service.dart';
 
 class FolderController extends ChangeNotifier {
   late final OnAudioQuery _audioQuery;
-  final _permissionService = PermissionService();
+  late final PermissionService _permissionService;
 
   // Map of folder path -> List of songs
   Map<String, List<SongModel>> _allFolders = {};
@@ -32,8 +32,9 @@ class FolderController extends ChangeNotifier {
   // Check if folder is hidden
   bool isFolderHidden(String path) => _hiddenFolders.contains(path);
 
-  FolderController({OnAudioQuery? audioQuery}) {
+  FolderController({OnAudioQuery? audioQuery, PermissionService? permissionService}) {
     _audioQuery = audioQuery ?? OnAudioQuery();
+    _permissionService = permissionService ?? PermissionService();
     _init();
   }
 

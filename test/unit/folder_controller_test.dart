@@ -2,16 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:offline_music_player/controllers/folder_controller.dart';
+import 'package:vibescape/controllers/folder_controller.dart';
+import 'package:vibescape/services/permission_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'folder_controller_test.mocks.dart';
 
-@GenerateMocks([OnAudioQuery])
+@GenerateMocks([OnAudioQuery, PermissionService])
 void main() {
   late MockOnAudioQuery mockAudioQuery;
+  late MockPermissionService mockPermissionService;
   late FolderController folderController;
 
-  setUp(() {
+  setUp(() async {
+    // Ensure binding is initialized for SharedPreferences
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
     mockAudioQuery = MockOnAudioQuery();
+    mockPermissionService = MockPermissionService();
+
     // Default stub to avoid MissingStubError during instantiation
     when(mockAudioQuery.querySongs(
       sortType: anyNamed('sortType'),
@@ -20,6 +29,9 @@ void main() {
       ignoreCase: anyNamed('ignoreCase'),
       path: anyNamed('path'),
     )).thenAnswer((_) async => []);
+
+    // Default stub for permissions
+    when(mockPermissionService.hasPermissions()).thenAnswer((_) async => true);
   });
 
   test('fetchFolders groups songs by folder', () async {
@@ -56,11 +68,13 @@ void main() {
       path: null,
     )).thenAnswer((_) async => songs);
 
-    folderController = FolderController(audioQuery: mockAudioQuery);
+    folderController = FolderController(
+      audioQuery: mockAudioQuery,
+      permissionService: mockPermissionService,
+    );
 
-    // Wait for the async operation started in constructor
-    // We can re-call fetchFolders to await it properly
-    await folderController.fetchFolders();
+    // Simulate permission granted to trigger fetchFolders
+    await folderController.onPermissionGranted();
 
     expect(folderController.folderPaths.length, 2);
     expect(folderController.folderPaths, contains("/storage/emulated/0/Music"));
@@ -70,8 +84,11 @@ void main() {
     expect(folderController.getSongsInFolder("/storage/emulated/0/Downloads").length, 1);
   });
 
-  test('getFolderName extracts name correctly (Unix)', () {
-    folderController = FolderController(audioQuery: mockAudioQuery);
+  test('getFolderName extracts name correctly (Unix)', () async {
+    folderController = FolderController(
+      audioQuery: mockAudioQuery,
+      permissionService: mockPermissionService,
+    );
     expect(folderController.getFolderName("/storage/emulated/0/Music"), "Music");
   });
 }

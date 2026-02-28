@@ -1,4 +1,5 @@
 class Secrets {
-  // TODO: Rotate this key in Google Cloud Console since it was exposed to GitHub.
-  static const String youtubeApiKey = 'AIzaSyCKKQYGUGiZz6xI7skyLBJL7npLrQICMIE';
+  // TODO: Add your YouTube Data API Key here.
+  // Obtain one from https://console.cloud.google.com/apis/credentials
+  static const String youtubeApiKey = 'YOUR_API_KEY_HERE';
 }

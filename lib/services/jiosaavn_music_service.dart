@@ -131,7 +131,11 @@ class JioSaavnMusicService {
           final qualityB = b['quality']?.toString() ?? '';
           return qualityB.compareTo(qualityA); // simple descending sort for 500x500 vs 150x150
         });
-        thumbnailUrl = sortedImages.first['url']?.toString();
+        String url = sortedImages.first['url']?.toString() ?? '';
+        // Upscale 150x150 images to crisp 500x500 variants served by JioSaavn CDN
+        if (url.isNotEmpty) {
+           thumbnailUrl = url.replaceAll('150x150', '500x500');
+        }
       }
 
       // Parse duration

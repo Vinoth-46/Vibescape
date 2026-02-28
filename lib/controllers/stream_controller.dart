@@ -2,14 +2,18 @@ import 'package:flutter/foundation.dart';
 import '../models/stream_song_model.dart';
 import '../services/youtube_music_service.dart';
 import '../services/jiosaavn_music_service.dart';
+import '../services/gaana_music_service.dart';
+import '../models/stream_song_model.dart';
 import '../services/cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 
 
 /// Controller for managing streaming songs
 class StreamController extends ChangeNotifier {
   final YouTubeMusicService _youtubeService = YouTubeMusicService();
   final JioSaavnMusicService _jiosaavnService = JioSaavnMusicService();
+  final GaanaMusicService _gaanaService = GaanaMusicService();
   final CacheService _cacheService = CacheService();
 
   List<StreamSongModel> _searchResults = [];
@@ -125,12 +129,30 @@ class StreamController extends ChangeNotifier {
 
   Future<List<StreamSongModel>> _fetchCombined(String query) async {
       try {
-        final saavnSongs = await _jiosaavnService.searchSongs(query);
-        if (saavnSongs.isNotEmpty) {
-          return saavnSongs;
+        final futures = await Future.wait([
+            _jiosaavnService.searchSongs(query),
+            _gaanaService.searchSongs(query),
+        ]);
+        
+        final saavnSongs = futures[0];
+        final gaanaSongs = futures[1];
+        
+        // Interleave the arrays directly to keep variety high (e.g. [Saavn 1, Gaana 1, Saavn 2, Gaana 2...])
+        // And shuffle the result to guarantee the Explore page feels physically fresh every single launch!
+        List<StreamSongModel> combined = [];
+        final maxLength = [saavnSongs.length, gaanaSongs.length].reduce(max);
+        
+        for (int i = 0; i < maxLength; i++) {
+           if (i < saavnSongs.length) combined.add(saavnSongs[i]);
+           if (i < gaanaSongs.length) combined.add(gaanaSongs[i]);
         }
         
-        debugPrint('StreamController: JioSaavn trending returned empty, falling back to YouTube');
+        if (combined.isNotEmpty) {
+           combined.shuffle(); // Prevent repetition!
+           return combined;
+        }
+        
+        debugPrint('StreamController: Dual-fetch trending returned empty, falling back to YouTube');
         return await _youtubeService.searchSongs(query);
       } catch (e) {
         debugPrint('StreamController: Fetch combined error: $e');
@@ -158,7 +180,9 @@ class StreamController extends ChangeNotifier {
     // Otherwise get the stream URL based on source
     try {
       String? streamUrl;
-      if (song.source == 'jiosaavn') {
+      if (song.source == 'gaana') {
+        streamUrl = await _gaanaService.getStreamUrl(song.id);
+      } else if (song.source == 'jiosaavn') {
         streamUrl = await _jiosaavnService.getStreamUrl(song.id);
       } else {
         streamUrl = await _youtubeService.getStreamUrl(song.id);

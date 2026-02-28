@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/foundation.dart';
 import '../services/jiosaavn_music_service.dart';
+import '../services/gaana_music_service.dart';
 import '../services/youtube_music_service.dart';
 
 Future<AudioHandler> initAudioService() async {
@@ -166,7 +167,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
            if (uriString.contains('placeholder-for-lazy-load')) {
              debugPrint("MyAudioHandler: Lazily resolving URL for $id...");
              String? newUrl;
-             if (sourceStr == 'jiosaavn') {
+             if (sourceStr == 'gaana') {
+                newUrl = await GaanaMusicService().getStreamUrl(id);
+             } else if (sourceStr == 'jiosaavn') {
                 newUrl = await JioSaavnMusicService().getStreamUrl(id);
              } else {
                 newUrl = await YouTubeMusicService().getStreamUrl(id);
@@ -225,6 +228,30 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
        _isStreamingQueue = extras?['isStreamingQueue'] == true;
        _streamingPlaylist = extras?['playlist'] as List<dynamic>?;
        debugPrint("MyAudioHandler: Received streaming queue of length ${_streamingPlaylist?.length}");
+    } else if (name == 'appendStreamingQueue') {
+       final newSongs = extras?['playlist'] as List<dynamic>? ?? [];
+       if (_streamingPlaylist != null) {
+          _streamingPlaylist!.addAll(newSongs);
+       }
+       final currentSource = player.audioSource;
+       if (currentSource is ConcatenatingAudioSource) {
+          final sources = newSongs.map((s) {
+            String tempUrl = s['cachedPath'] ?? 'https://example.com/placeholder-for-lazy-load.mp3';  
+            return AudioSource.uri(
+                Uri.parse(tempUrl),
+                tag: MediaItem(
+                  id: s['id']?.toString() ?? '',
+                  album: s['album'] ?? "Streaming Music",
+                  artist: s['artist'] ?? "Unknown Artist",
+                  title: s['title'] ?? 'Unknown',
+                  artUri: s['thumbnailUrl'] != null ? Uri.parse(s['thumbnailUrl']) : null,
+                  extras: {'source': s['source'] ?? 'jiosaavn', 'isStream': true},
+                ),
+            );
+          }).toList();
+          await currentSource.addAll(sources);
+          debugPrint("MyAudioHandler: Appended ${sources.length} items to streaming queue");
+       }
     }
   }
 

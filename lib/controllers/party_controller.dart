@@ -139,10 +139,9 @@ class PartyController extends ChangeNotifier {
         
         // Only seek if the difference is more than 0.5 seconds
         if ((localPos.inMilliseconds - remotePos.inMilliseconds).abs() > 500) {
-            // Predict actual remote position since last updated timestamp (Firebase round-trip compensation)
-            final timeSinceUpdate = DateTime.now().millisecondsSinceEpoch - room.lastUpdated;
-            // Add half the network trip (approx 50-100ms) to ensure we skip slightly ahead to meet them natively
-            final predictedPos = remotePos + Duration(milliseconds: room.isPlaying ? timeSinceUpdate + 100 : 0);
+            // Seek directly to the host's raw playbackPosition + minimal buffer to account for hardware execution delay
+            // We discarded the DateTime.now() math because local clock skews across devices causes catastrophic sync drifts.
+            final predictedPos = remotePos + Duration(milliseconds: room.isPlaying ? 50 : 0);
             _audioPlayerController.seek(predictedPos);
         }
       } else {

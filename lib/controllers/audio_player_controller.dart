@@ -43,8 +43,10 @@ class AudioPlayerController extends ChangeNotifier {
   List<SongModel> get songs => _songs;
 
   // Streams - Route directly from AudioService (with null safety)
-  Stream<Duration> get positionStream => _audioHandler?.playbackState
-      .map((state) => state.updatePosition) ?? Stream.value(Duration.zero);
+  Stream<Duration> get positionStream {
+    if (_audioHandler == null) return Stream.value(Duration.zero);
+    return Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition);
+  }
   
   Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;
   bool get isPlaying => _audioHandler?.playbackState.value.playing ?? false;
@@ -128,7 +130,7 @@ class AudioPlayerController extends ChangeNotifier {
 
     // Stop at end of track logic
     String? previousMediaId;
-    _audioHandler?.mediaItem.listen((item) {
+    _audioHandler?.mediaItem.listen((item) async {
       if (item != null) {
         if (previousMediaId != null && previousMediaId != item.id) {
           // Track changed
@@ -138,9 +140,44 @@ class AudioPlayerController extends ChangeNotifier {
           }
         }
         previousMediaId = item.id;
+        
+        // INFINITE RADIO TRIGGER
+        if (item.extras?['isStream'] == true && !_isFetchingRadio) {
+           final queue = _audioHandler?.queue.value ?? [];
+           if (queue.isNotEmpty) {
+             final currentIdx = queue.indexWhere((q) => q.id == item.id);
+             // If we are at the last or second to last song, fetch radio continuously!
+             if (currentIdx != -1 && currentIdx >= queue.length - 2) {
+                _isFetchingRadio = true;
+                debugPrint("AudioPlayerController: Approaching end of queue, fetching Infinite Radio...");
+                try {
+                   final recommended = await JioSaavnMusicService().getSimilarSongs(item.id);
+                   if (recommended.isNotEmpty) {
+                      // Filter out songs already in the queue to prevent looping the exact same songs
+                      final existingIds = queue.map((q) => q.id).toSet();
+                      final fresh = recommended.where((r) => !existingIds.contains(r.id)).toList();
+                      
+                      if (fresh.isNotEmpty) {
+                         debugPrint("AudioPlayerController: Appending ${fresh.length} fresh similar songs.");
+                         final freshJson = fresh.map((s) => s.toJson()).toList();
+                         await _audioHandler?.customAction('appendStreamingQueue', {
+                            'playlist': freshJson,
+                         });
+                      }
+                   }
+                } catch (e) {
+                   debugPrint("AudioPlayerController: Radio fetch error: $e");
+                } finally {
+                   _isFetchingRadio = false;
+                }
+             }
+           }
+        }
       }
     });
   }
+
+  bool _isFetchingRadio = false;
 
   // Dummy factory for when AudioService fails
   AudioPlayerController.dummy() : _audioHandler = null {
@@ -394,6 +431,18 @@ class AudioPlayerController extends ChangeNotifier {
     final mediaItem = _audioHandler?.mediaItem.value;
     if (mediaItem == null || mediaItem.extras?['isStream'] != true) return null;
     
+    final src = mediaItem.extras?['source'] as String? ?? 'jiosaavn';
+    
+    if (src == 'youtube') {
+      return StreamSongModel.fromYouTube(
+         videoId: mediaItem.id,
+         title: mediaItem.title,
+         artist: mediaItem.artist ?? "Unknown",
+         thumbnailUrl: mediaItem.artUri?.toString(),
+         duration: mediaItem.duration ?? Duration.zero,
+      );
+    }
+    
     return StreamSongModel.fromJioSaavn(
        songId: mediaItem.id,
        title: mediaItem.title,
@@ -460,41 +509,6 @@ class AudioPlayerController extends ChangeNotifier {
         final handler = _audioHandler as MyAudioHandler;
         
         List<StreamSongModel> activeQueue = playlist ?? [song];
-        
-        // Auto-Radio Queue Generation (if user plays a single searched song, auto-fill!)
-        if (playlist == null || playlist.length <= 1) {
-           debugPrint("AudioPlayerController: Playing single song, spinning up Auto-Radio Queue in background...");
-           activeQueue = [song]; // Play instantly
-           
-           // Fetch similar songs in the background without blocking playback
-           JioSaavnMusicService().getSimilarSongs(song.id).then((recommended) async {
-             if (recommended.isNotEmpty) {
-                 debugPrint("AudioPlayerController: Auto-Radio found ${recommended.length} songs. Appending to queue...");
-                 final fullQueue = [song, ...recommended];
-                 
-                 final sources = fullQueue.map((s) {
-                   String tempUrl = s.cachedPath ?? 'https://example.com/placeholder-for-lazy-load.mp3';  
-                   return s.id == song.id 
-                       ? source 
-                       : AudioSource.uri(
-                           Uri.parse(tempUrl),
-                           tag: MediaItem(
-                             id: s.id,
-                             album: s.album ?? "Streaming Music",
-                             artist: s.artist,
-                             title: s.title,
-                             artUri: s.thumbnailUrl != null ? Uri.parse(s.thumbnailUrl!) : null,
-                             extras: {'source': s.source, 'isStream': true},
-                           ),
-                        );
-                 }).toList();
-                 
-                 await handler.setPlaylist(sources, 0);
-                 final playlistJson = fullQueue.map((s) => s.toJson()).toList();
-                 await handler.customAction('setStreamingQueue', {'isStreamingQueue': true, 'playlist': playlistJson});
-             }
-           });
-        }
         
         // Find index of chosen song in playlist, default 0
         int initialIndex = activeQueue.indexWhere((s) => s.id == song.id);

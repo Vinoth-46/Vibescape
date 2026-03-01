@@ -1,0 +1,4 @@
+## $(date +%Y-%m-%d) - [Hardcoded Secrets & Battery Drain]
+**Vulnerability:** Hardcoded API key placeholder in `lib/secrets.dart` which encourages users to check in their Google API keys. Also found a critical performance/battery drain issue where `Stream.periodic(const Duration(milliseconds: 200))` ran constantly for audio position updates even when paused.
+**Learning:** Hardcoding API keys directly in Dart files is a common anti-pattern that leads to secret leakage. Constant polling streams (`Stream.periodic`) in state controllers drain mobile batteries rapidly if not paused/cancelled.
+**Prevention:** Use `String.fromEnvironment` combined with `--dart-define` for build-time secrets. Rely on underlying library streams (e.g., `AudioService.position`) which are optimized to only emit when necessary.

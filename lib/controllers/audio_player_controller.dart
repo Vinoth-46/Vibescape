@@ -43,9 +43,11 @@ class AudioPlayerController extends ChangeNotifier {
   List<SongModel> get songs => _songs;
 
   // Streams - Route directly from AudioService (with null safety)
+  Stream<Duration>? _cachedPositionStream;
   Stream<Duration> get positionStream {
     if (_audioHandler == null) return Stream.value(Duration.zero);
-    return Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition);
+    _cachedPositionStream ??= Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition).asBroadcastStream();
+    return _cachedPositionStream!;
   }
   
   Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;

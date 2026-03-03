@@ -145,71 +145,80 @@ class _MiniPlayerState extends State<MiniPlayer>
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Animated Progress Bar at top
-                      StreamBuilder<Duration>(
-                        stream: controller.positionStream,
-                        builder: (context, snapshot) {
-                          final position = snapshot.data ?? Duration.zero;
-                          final duration = controller.duration;
-                          final progress = duration.inMilliseconds > 0
-                              ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
-                              : 0.0;
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Animated Progress Bar at top, outside BackdropFilter to prevent battery drain
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                    child: StreamBuilder<Duration>(
+                      stream: controller.positionStream,
+                      builder: (context, snapshot) {
+                        final position = snapshot.data ?? Duration.zero;
+                        final duration = controller.duration;
+                        final progress = duration.inMilliseconds > 0
+                            ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0)
+                            : 0.0;
 
-                          return LayoutBuilder(
-                            builder: (context, constraints) {
-                              final barWidth = constraints.maxWidth * progress;
-                              return SizedBox(
-                                height: 3,
-                                child: Stack(
-                                  children: [
-                                    // Background track
-                                    Container(
-                                      width: double.infinity,
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: isDark
-                                            ? Colors.white.withOpacity(0.05)
-                                            : Colors.black.withOpacity(0.04),
-                                      ),
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            final barWidth = constraints.maxWidth * progress;
+                            return SizedBox(
+                              height: 3,
+                              child: Stack(
+                                children: [
+                                  // Background track
+                                  Container(
+                                    width: double.infinity,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withOpacity(0.05)
+                                          : Colors.black.withOpacity(0.04),
                                     ),
-                                    // Progress fill — always starts from left
-                                    Container(
-                                      width: barWidth,
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        gradient: const LinearGradient(
-                                          colors: [
-                                            Color(0xFF007AFF),
-                                            Color(0xFF00D4FF),
-                                          ],
-                                        ),
-                                        boxShadow: progress > 0
-                                            ? [
-                                                BoxShadow(
-                                                  color: const Color(0xFF007AFF).withOpacity(0.6),
-                                                  blurRadius: 6,
-                                                ),
-                                              ]
-                                            : null,
+                                  ),
+                                  // Progress fill — always starts from left
+                                  Container(
+                                    width: barWidth,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFF007AFF),
+                                          Color(0xFF00D4FF),
+                                        ],
                                       ),
+                                      boxShadow: progress > 0
+                                          ? [
+                                              BoxShadow(
+                                                color: const Color(0xFF007AFF).withOpacity(0.6),
+                                                blurRadius: 6,
+                                              ),
+                                            ]
+                                          : null,
                                     ),
-                                  ],
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
 
-                      // Main content
-                      Padding(
+                  // Main content inside BackdropFilter
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                      child: Padding(
                         padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
                         child: Row(
                           children: [
@@ -379,9 +388,9 @@ class _MiniPlayerState extends State<MiniPlayer>
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),

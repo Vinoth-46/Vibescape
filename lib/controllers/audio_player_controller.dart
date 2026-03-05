@@ -42,10 +42,14 @@ class AudioPlayerController extends ChangeNotifier {
   List<SongModel> _songs = [];
   List<SongModel> get songs => _songs;
 
+  // Cache the periodic stream to prevent creating multiple active timers which causes battery drain
+  Stream<Duration>? _positionStream;
+
   // Streams - Route directly from AudioService (with null safety)
   Stream<Duration> get positionStream {
     if (_audioHandler == null) return Stream.value(Duration.zero);
-    return Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition);
+    _positionStream ??= Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition).asBroadcastStream();
+    return _positionStream!;
   }
   
   Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;

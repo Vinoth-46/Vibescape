@@ -42,10 +42,31 @@ class AudioPlayerController extends ChangeNotifier {
   List<SongModel> _songs = [];
   List<SongModel> get songs => _songs;
 
+  Stream<Duration>? _positionStream;
+  StreamController<Duration>? _positionStreamController;
+  Timer? _positionTimer;
+
   // Streams - Route directly from AudioService (with null safety)
   Stream<Duration> get positionStream {
     if (_audioHandler == null) return Stream.value(Duration.zero);
-    return Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition);
+
+    if (_positionStream == null) {
+      _positionStreamController = StreamController<Duration>.broadcast(
+        onListen: () {
+          _positionTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+            if (_audioHandler != null && !_positionStreamController!.isClosed) {
+              _positionStreamController!.add(_audioHandler!.playbackState.value.updatePosition);
+            }
+          });
+        },
+        onCancel: () {
+          _positionTimer?.cancel();
+          _positionTimer = null;
+        },
+      );
+      _positionStream = _positionStreamController!.stream;
+    }
+    return _positionStream!;
   }
   
   Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;

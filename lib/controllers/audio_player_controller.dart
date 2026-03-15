@@ -43,9 +43,28 @@ class AudioPlayerController extends ChangeNotifier {
   List<SongModel> get songs => _songs;
 
   // Streams - Route directly from AudioService (with null safety)
+  StreamController<Duration>? _positionController;
+  Timer? _positionTimer;
+
   Stream<Duration> get positionStream {
     if (_audioHandler == null) return Stream.value(Duration.zero);
-    return Stream.periodic(const Duration(milliseconds: 200), (_) => _audioHandler!.playbackState.value.updatePosition);
+
+    if (_positionController == null) {
+      _positionController = StreamController<Duration>.broadcast(
+        onListen: () {
+          _positionTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+            if (!_positionController!.isClosed) {
+              _positionController!.add(_audioHandler!.playbackState.value.updatePosition);
+            }
+          });
+        },
+        onCancel: () {
+          _positionTimer?.cancel();
+          _positionTimer = null;
+        },
+      );
+    }
+    return _positionController!.stream;
   }
   
   Duration get position => _audioHandler?.playbackState.value.updatePosition ?? Duration.zero;
@@ -563,5 +582,12 @@ class AudioPlayerController extends ChangeNotifier {
   /// Clear current stream song (when switching to local)
   void clearStreamSong() {
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _positionTimer?.cancel();
+    _positionController?.close();
+    super.dispose();
   }
 }

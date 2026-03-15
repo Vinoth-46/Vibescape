@@ -1,0 +1,4 @@
+## 2024-05-24 - [Hardcoded API Key Pattern]
+**Vulnerability:** The application was found to store the YouTube API Key (`Secrets.youtubeApiKey`) inside a hardcoded source file (`lib/secrets.dart`), rather than passing it securely from the environment. This exposes API keys or secrets directly within the source repository.
+**Learning:** Hardcoding secrets is a common but dangerous pattern that can lead to credential leakage if the code repository is ever shared or compromised. Flutter provides standard ways to inject secrets without having to hardcode them directly into Dart files.
+**Prevention:** Always read sensitive configuration items, such as API Keys, from environment variables at build-time using `String.fromEnvironment('KEY_NAME')`. Supply these during build using `--dart-define=KEY_NAME=value`. No secret file should be committed into source control.
